@@ -15,7 +15,14 @@ pub struct WindowApplication {
     window: glfw::Window,
     events: std::sync::mpsc::Receiver<(f64, glfw::WindowEvent)>,
 
+    window_width: u32,
+    window_height: u32,
+
     dxgi_factory: IDXGIFactory2,
+    device: ID3D11Device,
+    device_context: ID3D11DeviceContext,
+    swap_chain: IDXGISwapChain1,
+    render_target: ID3D11RenderTargetView,
 }
 
 impl WindowApplication {
@@ -62,6 +69,8 @@ impl WindowApplication {
         //     ppimmediatecontext: ::core::option::Option<*mut ::core::option::Option<ID3D11DeviceContext>>
         // ) -> ::windows_core::Result<()>
 
+        let mut device_context: Option<ID3D11DeviceContext> = Default::default();
+
         unsafe {
             D3D11CreateDevice(
                 None,
@@ -72,7 +81,7 @@ impl WindowApplication {
                 D3D11_SDK_VERSION,
                 Some(&mut device),
                 None,
-                None,
+                Some(&mut device_context),
             ).unwrap();
         };
 
@@ -117,7 +126,7 @@ impl WindowApplication {
 
         let back_buffer: ID3D11Resource = unsafe { swap_chain.GetBuffer(0).unwrap() };
 
-        let render_target: ID3D11RenderTargetView;
+        let mut render_target: Option<ID3D11RenderTargetView> = Default::default();
 
         // windows::core::IntoParam<windows::Win32::Graphics::Direct3D11::ID3D11Resource
 
@@ -128,15 +137,28 @@ impl WindowApplication {
             device_unwrapped.CreateRenderTargetView(
                 &back_buffer,
                 None,
-                None, // Some(&render_target),
+                Some(&mut render_target),
             ).unwrap();
         };
         
-        // let device_context: *mut ID3D11DeviceContext;
+        
     
 
 
-        Ok(WindowApplication { glfw, window, events, dxgi_factory })
+        Ok(WindowApplication { 
+            glfw,
+            window,
+            events,
+
+            window_height,
+            window_width,
+
+            dxgi_factory,
+            device: device_unwrapped,
+            device_context: device_context.unwrap(),
+            swap_chain,
+            render_target: render_target.unwrap(),
+        })
     }
 
     pub fn run(&mut self) {
@@ -161,6 +183,22 @@ impl WindowApplication {
     }
 
     fn render(&self) {
+
+        let viewport = D3D11_VIEWPORT {
+            TopLeftX: 0f32,
+            TopLeftY: 0f32,
+            Width: self.window_width as f32,
+            Height: self.window_height as f32,
+            MinDepth: 0f32,
+            MaxDepth: 1f32,
+        };
+
+        unsafe { 
+            self.device_context.ClearRenderTargetView(&self.render_target, &[0.1f32, 0.1f32, 0.1f32, 0.1f32]);
+            self.device_context.RSSetViewports(Some(&[viewport]));
+            self.device_context.OMSetRenderTargets(Some(&[Some(self.render_target.clone())]), None);
+            let _ = self.swap_chain.Present(1, 0); 
+        };
 
     }
 
