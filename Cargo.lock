@@ -27,9 +27,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "directx_math"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b80b68043b3d122ce8a8fd6cba0803d6c92746a472f006e2278fc0d5262f2183"
+
+[[package]]
 name = "dx11-graphics-engine"
 version = "0.1.0"
 dependencies = [
+ "directx_math",
  "glfw",
  "windows",
 ]

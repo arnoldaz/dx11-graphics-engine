@@ -1,4 +1,6 @@
 
+use std::{os::windows::prelude::OsStrExt, ptr};
+
 use windows::{
     core::*, Foundation::Numerics::*, Win32::Foundation::*, Win32::Graphics::Direct2D::Common::*,
     Win32::Graphics::Direct2D::*, Win32::Graphics::Direct3D::*, Win32::Graphics::Direct3D11::*,
@@ -6,9 +8,23 @@ use windows::{
     Win32::System::Com::*, Win32::System::LibraryLoader::*, Win32::System::Performance::*,
     Win32::System::SystemInformation::GetLocalTime, Win32::UI::Animation::*,
     Win32::UI::WindowsAndMessaging::*,
+
+    Win32::Graphics::Direct3D::Fxc::*,
+    Win32::Graphics::Hlsl::*
 };
 
+use directx_math::*;
+
+use std::mem::*;
+
 extern crate glfw;
+
+
+pub struct VertexPositionColor {
+    position: XMFLOAT3,
+    color: XMFLOAT3,
+}
+
 
 pub struct WindowApplication {
     glfw: glfw::Glfw,
@@ -23,6 +39,12 @@ pub struct WindowApplication {
     device_context: ID3D11DeviceContext,
     swap_chain: IDXGISwapChain1,
     render_target: ID3D11RenderTargetView,
+
+    vertex_layout: ID3D11InputLayout,
+    triangle_vertices: ID3D11Buffer,
+
+    vertex_shader: ID3D11VertexShader,
+    pixel_shader: ID3D11PixelShader,
 }
 
 impl WindowApplication {
@@ -140,12 +162,117 @@ impl WindowApplication {
                 Some(&mut render_target),
             ).unwrap();
         };
-        
-        
-    
 
 
-        Ok(WindowApplication { 
+        // let vertex_shader = Self::create_vertex_shader(&device_unwrapped, "main.vs.hlsl");
+        let vertex_shader_blob = Self::compile_shader("src/main.vs.hlsl", "Main", "vs_5_0");
+
+        let data_slice_vertex: &[u8] = unsafe {
+            std::slice::from_raw_parts(vertex_shader_blob.GetBufferPointer() as *const u8, vertex_shader_blob.GetBufferSize())
+        };
+
+        let vertex_shader: *mut Option<ID3D11VertexShader> = ptr::null_mut();
+
+        unsafe {
+            device_unwrapped.CreateVertexShader(
+                data_slice_vertex,
+                None,
+                Some(vertex_shader),
+            ).unwrap();
+        }
+
+        let vertex_shader = unsafe { vertex_shader.as_ref().unwrap().to_owned().unwrap() };
+
+
+
+        // let pixel_shader = Self::create_pixel_shader(&device_unwrapped, "main.ps.hlsl");
+        let pixel_shader_blob = Self::compile_shader("AAAAAAAAAsrc/main.ps.hlsl", "Main", "ps_5_0");
+
+        let data_slice_pixel: &[u8] = unsafe {
+            std::slice::from_raw_parts(pixel_shader_blob.GetBufferPointer() as *const u8, pixel_shader_blob.GetBufferSize())
+        };
+
+        let pixel_shader: *mut Option<ID3D11PixelShader> = ptr::null_mut();
+
+        unsafe {
+            device_unwrapped.CreatePixelShader(
+                data_slice_pixel,
+                None,
+                Some(pixel_shader),
+            ).unwrap();
+        }
+
+        let pixel_shader = unsafe { pixel_shader.as_ref().unwrap().to_owned().unwrap() };
+
+
+
+        let vertex_input_layout_info: [D3D11_INPUT_ELEMENT_DESC; 2] = [
+            D3D11_INPUT_ELEMENT_DESC {
+                SemanticName: PCSTR("POSITION".as_ptr()),
+                SemanticIndex: 0,
+                Format: DXGI_FORMAT_R32G32B32_FLOAT,
+                InputSlot: 0,
+                AlignedByteOffset: 0, // core::mem::offset_of!(VertexPositionColor, position) as u32,
+                InputSlotClass: D3D11_INPUT_PER_VERTEX_DATA,
+                InstanceDataStepRate: 0,
+
+            },
+            D3D11_INPUT_ELEMENT_DESC {
+                SemanticName: PCSTR("COLOR".as_ptr()),
+                SemanticIndex: 0,
+                Format: DXGI_FORMAT_R32G32B32_FLOAT,
+                InputSlot: 0,
+                AlignedByteOffset: 12, // core::mem::offset_of!(VertexPositionColor, position) as u32,
+                InputSlotClass: D3D11_INPUT_PER_VERTEX_DATA,
+                InstanceDataStepRate: 0,
+            }
+        ];
+
+
+        let vertex_layout: *mut Option<ID3D11InputLayout> = ptr::null_mut();
+        
+        unsafe { 
+            device_unwrapped.CreateInputLayout(
+                &vertex_input_layout_info,
+                data_slice_vertex,
+                Some(vertex_layout),
+            ).unwrap();
+        };
+
+
+        let vertices: [VertexPositionColor; 3] = [
+            VertexPositionColor { position: XMFLOAT3 { x:  0.0, y:  0.5, z: 0.0 }, color: XMFLOAT3 { x: 0.25, y: 0.39, z: 0.19 } },
+            VertexPositionColor { position: XMFLOAT3 { x:  0.5, y: -0.5, z: 0.0 }, color: XMFLOAT3 { x: 0.44, y: 0.75, z: 0.35 } },
+            VertexPositionColor { position: XMFLOAT3 { x: -0.5, y: -0.5, z: 0.0 }, color: XMFLOAT3 { x: 0.38, y: 0.55, z: 0.20 } },
+        ];
+
+        let buffer_info = D3D11_BUFFER_DESC {
+            ByteWidth: size_of::<[VertexPositionColor; 3]>() as u32,
+            Usage: D3D11_USAGE_IMMUTABLE,
+            BindFlags: 1, //D3D11_BIND_VERTEX_BUFFER,
+            ..Default::default()
+            // CPUAccessFlags: todo!(),
+            // MiscFlags: todo!(),
+            // StructureByteStride: todo!(),
+        };
+
+        let resource_data = D3D11_SUBRESOURCE_DATA {
+            pSysMem: vertices.as_ptr() as *const ::core::ffi::c_void,
+            ..Default::default()
+        };
+
+        let triangle_vertices: *mut Option<ID3D11Buffer> = ptr::null_mut();
+
+        unsafe { 
+            device_unwrapped.CreateBuffer(
+                &buffer_info,
+                Some(&resource_data),
+                Some(triangle_vertices),
+            ).unwrap();
+        }
+
+
+        let application = WindowApplication { 
             glfw,
             window,
             events,
@@ -158,7 +285,108 @@ impl WindowApplication {
             device_context: device_context.unwrap(),
             swap_chain,
             render_target: render_target.unwrap(),
-        })
+
+            vertex_layout: unsafe { vertex_layout.as_ref().unwrap().to_owned().unwrap() },
+            triangle_vertices: unsafe { triangle_vertices.as_ref().unwrap().to_owned().unwrap() },
+
+            vertex_shader,
+            pixel_shader,
+        };
+
+        Ok(application)
+    }
+
+    fn compile_shader(file_name: &str, entry_point: &str, profile: &str) -> ID3DBlob {
+        let compiled_shader: *mut Option<ID3DBlob> = ptr::null_mut();
+        let error_messages: *mut Option<ID3DBlob> = ptr::null_mut();
+
+        // pub unsafe fn D3DCompileFromFile<P0, P1, P2, P3>(
+        //     pfilename: P0, 
+        //     pdefines: ::core::option::Option<*const super::D3D_SHADER_MACRO>,
+        //      pinclude: P1,
+        //      pentrypoint: P2,
+        //      ptarget: P3,
+        //      flags1: u32,
+        //      flags2: u32,
+        //      ppcode: *mut ::core::option::Option<super::ID3DBlob>,
+        //      pperrormsgs: ::core::option::Option<*mut ::core::option::Option<super::ID3DBlob>>) -> ::windows_core::Result<()>
+        // where
+        //     P0: ::windows_core::IntoParam<::windows_core::PCWSTR>,
+        //     P1: ::windows_core::IntoParam<super::ID3DInclude>,
+        //     P2: ::windows_core::IntoParam<::windows_core::PCSTR>,
+        //     P3: ::windows_core::IntoParam<::windows_core::PCSTR>,
+        // {
+
+            
+
+        // let wide_file_name: Vec<u16> = std::ffi::OsStr::new(&file_name)
+        //     .encode_wide()
+        //     .chain(Some(0).into_iter()) // Null-terminate the wide string
+        //     .collect();
+
+        let path = std::path::Path::new(file_name);
+        let os_str = path.as_os_str();
+
+        let h_string = HSTRING::from(os_str);
+
+
+        unsafe { 
+            D3DCompileFromFile(
+                &h_string,
+                None,
+                None, // D3D_COMPILE_STANDARD_FILE_INCLUDE,
+                PCSTR::from_raw(entry_point.as_ptr()),
+                PCSTR::from_raw(profile.as_ptr()),
+                D3DCOMPILE_ENABLE_STRICTNESS,
+                0,
+                compiled_shader,
+                Some(error_messages),
+            ).unwrap();
+        }
+
+        let shader = unsafe { std::ptr::read(compiled_shader) };
+
+        shader.as_ref().unwrap().to_owned()
+    }
+
+    fn create_vertex_shader(device: &ID3D11Device, file_name: &'static str) -> ID3D11VertexShader {
+        let vertex_shader_blob = Self::compile_shader(file_name, "Main", "vs_5_0");
+
+        let data_slice: &[u8] = unsafe {
+            std::slice::from_raw_parts(vertex_shader_blob.GetBufferPointer() as *const u8, vertex_shader_blob.GetBufferSize())
+        };
+
+        let vertex_shader: *mut Option<ID3D11VertexShader> = ptr::null_mut();
+
+        unsafe {
+            device.CreateVertexShader(
+                data_slice,
+                None,
+                Some(vertex_shader),
+            ).unwrap();
+        }
+
+        unsafe { vertex_shader.as_ref().unwrap().to_owned().unwrap() }
+    }
+
+    fn create_pixel_shader(device: &ID3D11Device, file_name: &'static str) -> ID3D11PixelShader {
+        let pixel_shader_blob = Self::compile_shader(file_name, "Main", "ps_5_0");
+
+        let data_slice: &[u8] = unsafe {
+            std::slice::from_raw_parts(pixel_shader_blob.GetBufferPointer() as *const u8, pixel_shader_blob.GetBufferSize())
+        };
+
+        let pixel_shader: *mut Option<ID3D11PixelShader> = ptr::null_mut();
+
+        unsafe {
+            device.CreatePixelShader(
+                data_slice,
+                None,
+                Some(pixel_shader),
+            ).unwrap();
+        }
+
+        unsafe { pixel_shader.as_ref().unwrap().to_owned().unwrap() }
     }
 
     pub fn run(&mut self) {
@@ -195,8 +423,32 @@ impl WindowApplication {
 
         unsafe { 
             self.device_context.ClearRenderTargetView(&self.render_target, &[0.1f32, 0.1f32, 0.1f32, 0.1f32]);
+
+
+            self.device_context.IASetInputLayout(&self.vertex_layout);
+
+            let vertex_stride: u32 = size_of::<VertexPositionColor>() as u32;
+            let vertex_offset: u32 = 0;
+
+            self.device_context.IASetVertexBuffers(
+                0,
+                1,
+                Some(&Some(self.triangle_vertices.clone())),
+                Some(&vertex_stride),
+                Some(&vertex_offset)
+            );
+
+            self.device_context.IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
             self.device_context.RSSetViewports(Some(&[viewport]));
+
+            self.device_context.VSSetShader(&self.vertex_shader, None);
+            self.device_context.PSSetShader(&self.pixel_shader, None);
+
             self.device_context.OMSetRenderTargets(Some(&[Some(self.render_target.clone())]), None);
+
+            self.device_context.Draw(3, 0);
+
             let _ = self.swap_chain.Present(1, 0); 
         };
 
