@@ -1,14 +1,6 @@
 mod window_application;
-mod extensions;
-
-
-
 
 use window_application::WindowApplication;
-
-
-
-
 
 
 fn main() {

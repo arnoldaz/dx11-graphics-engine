@@ -1,16 +1,11 @@
 
-use std::{os::windows::prelude::OsStrExt, ptr};
+use std::{ptr};
 
 use windows::{
-    core::*, Foundation::Numerics::*, Win32::Foundation::*, Win32::Graphics::Direct2D::Common::*,
-    Win32::Graphics::Direct2D::*, Win32::Graphics::Direct3D::*, Win32::Graphics::Direct3D11::*,
-    Win32::Graphics::Dxgi::Common::*, Win32::Graphics::Dxgi::*, Win32::Graphics::Gdi::*,
-    Win32::System::Com::*, Win32::System::LibraryLoader::*, Win32::System::Performance::*,
-    Win32::System::SystemInformation::GetLocalTime, Win32::UI::Animation::*,
-    Win32::UI::WindowsAndMessaging::*,
+    core::*, Win32::Foundation::*, Win32::Graphics::Direct3D::*, Win32::Graphics::Direct3D11::*,
+    Win32::Graphics::Dxgi::Common::*, Win32::Graphics::Dxgi::*,
 
     Win32::Graphics::Direct3D::Fxc::*,
-    Win32::Graphics::Hlsl::*
 };
 
 use directx_math::*;
@@ -21,8 +16,8 @@ extern crate glfw;
 
 
 pub struct VertexPositionColor {
-    position: XMFLOAT3,
-    color: XMFLOAT3,
+    pub position: XMFLOAT3,
+    pub color: XMFLOAT3,
 }
 
 
@@ -98,7 +93,7 @@ impl WindowApplication {
                 None,
                 D3D_DRIVER_TYPE_HARDWARE,
                 HINSTANCE::default(),
-                D3D11_CREATE_DEVICE_FLAG(0),
+                D3D11_CREATE_DEVICE_DEBUG,
                 Some(&[D3D_FEATURE_LEVEL_11_0]),
                 D3D11_SDK_VERSION,
                 Some(&mut device),
@@ -165,50 +160,70 @@ impl WindowApplication {
 
 
         // let vertex_shader = Self::create_vertex_shader(&device_unwrapped, "main.vs.hlsl");
-        let vertex_shader_blob = Self::compile_shader("src/main.vs.hlsl", "Main", "vs_5_0");
+        let vertex_shader_blob = Self::compile_shader("main.vs.hlsl", "vs_5_0");
 
         let data_slice_vertex: &[u8] = unsafe {
             std::slice::from_raw_parts(vertex_shader_blob.GetBufferPointer() as *const u8, vertex_shader_blob.GetBufferSize())
         };
 
-        let vertex_shader: *mut Option<ID3D11VertexShader> = ptr::null_mut();
+        // let vertex_shader: *mut Option<ID3D11VertexShader> = ptr::null_mut();
+
+        let mut vertex_shader = None;
 
         unsafe {
             device_unwrapped.CreateVertexShader(
                 data_slice_vertex,
                 None,
-                Some(vertex_shader),
+                Some(&mut vertex_shader),
             ).unwrap();
         }
 
-        let vertex_shader = unsafe { vertex_shader.as_ref().unwrap().to_owned().unwrap() };
+        let vertex_shader = vertex_shader.as_ref().unwrap().to_owned();
 
+        // let mut shader = None;
+        // let mut error = None;
+   
+        // let shader = unsafe {
+        //     D3DCompileFromFile(
+        //         &shaders_hlsl,
+        //         None,
+        //         None,
+        //         s!("Main"),
+        //         s!("vs_5_0"),
+        //         0,
+        //         0,
+        //         &mut shader,
+        //         Some(&mut error),
+        //     )
+        // }
+        // .map(|()| shader.unwrap());
 
 
         // let pixel_shader = Self::create_pixel_shader(&device_unwrapped, "main.ps.hlsl");
-        let pixel_shader_blob = Self::compile_shader("AAAAAAAAAsrc/main.ps.hlsl", "Main", "ps_5_0");
+        let pixel_shader_blob = Self::compile_shader("main.ps.hlsl", "ps_5_0");
 
         let data_slice_pixel: &[u8] = unsafe {
             std::slice::from_raw_parts(pixel_shader_blob.GetBufferPointer() as *const u8, pixel_shader_blob.GetBufferSize())
         };
 
-        let pixel_shader: *mut Option<ID3D11PixelShader> = ptr::null_mut();
+        // let pixel_shader: *mut Option<ID3D11PixelShader> = ptr::null_mut();
+
+        let mut pixel_shader = None;
 
         unsafe {
             device_unwrapped.CreatePixelShader(
                 data_slice_pixel,
                 None,
-                Some(pixel_shader),
+                Some(&mut pixel_shader),
             ).unwrap();
         }
 
-        let pixel_shader = unsafe { pixel_shader.as_ref().unwrap().to_owned().unwrap() };
-
+        let pixel_shader = pixel_shader.as_ref().unwrap().to_owned();
 
 
         let vertex_input_layout_info: [D3D11_INPUT_ELEMENT_DESC; 2] = [
             D3D11_INPUT_ELEMENT_DESC {
-                SemanticName: PCSTR("POSITION".as_ptr()),
+                SemanticName: s!("POSITION"),
                 SemanticIndex: 0,
                 Format: DXGI_FORMAT_R32G32B32_FLOAT,
                 InputSlot: 0,
@@ -218,7 +233,7 @@ impl WindowApplication {
 
             },
             D3D11_INPUT_ELEMENT_DESC {
-                SemanticName: PCSTR("COLOR".as_ptr()),
+                SemanticName: s!("COLOR"),
                 SemanticIndex: 0,
                 Format: DXGI_FORMAT_R32G32B32_FLOAT,
                 InputSlot: 0,
@@ -229,21 +244,25 @@ impl WindowApplication {
         ];
 
 
-        let vertex_layout: *mut Option<ID3D11InputLayout> = ptr::null_mut();
-        
-        unsafe { 
+
+        // let vertex_layout: *mut Option<ID3D11InputLayout> = ptr::null_mut();
+
+
+        let mut vertex_layout = None;
+        let vertex_layout = unsafe { 
             device_unwrapped.CreateInputLayout(
                 &vertex_input_layout_info,
                 data_slice_vertex,
-                Some(vertex_layout),
-            ).unwrap();
-        };
+                Some(&mut vertex_layout),
+            )
+        }
+        .map(|()| vertex_layout.unwrap());
 
 
         let vertices: [VertexPositionColor; 3] = [
             VertexPositionColor { position: XMFLOAT3 { x:  0.0, y:  0.5, z: 0.0 }, color: XMFLOAT3 { x: 0.25, y: 0.39, z: 0.19 } },
             VertexPositionColor { position: XMFLOAT3 { x:  0.5, y: -0.5, z: 0.0 }, color: XMFLOAT3 { x: 0.44, y: 0.75, z: 0.35 } },
-            VertexPositionColor { position: XMFLOAT3 { x: -0.5, y: -0.5, z: 0.0 }, color: XMFLOAT3 { x: 0.38, y: 0.55, z: 0.20 } },
+            VertexPositionColor { position: XMFLOAT3 { x: -0.5, y: -0.5, z: 0.0 }, color: XMFLOAT3 { x: 1.0, y: 1.0, z: 0.20 } },
         ];
 
         let buffer_info = D3D11_BUFFER_DESC {
@@ -261,13 +280,14 @@ impl WindowApplication {
             ..Default::default()
         };
 
-        let triangle_vertices: *mut Option<ID3D11Buffer> = ptr::null_mut();
+        // let triangle_vertices: *mut Option<ID3D11Buffer> = ptr::null_mut();
+        let mut triangle_vertices = None;
 
         unsafe { 
             device_unwrapped.CreateBuffer(
                 &buffer_info,
                 Some(&resource_data),
-                Some(triangle_vertices),
+                Some(&mut triangle_vertices),
             ).unwrap();
         }
 
@@ -286,8 +306,8 @@ impl WindowApplication {
             swap_chain,
             render_target: render_target.unwrap(),
 
-            vertex_layout: unsafe { vertex_layout.as_ref().unwrap().to_owned().unwrap() },
-            triangle_vertices: unsafe { triangle_vertices.as_ref().unwrap().to_owned().unwrap() },
+            vertex_layout: vertex_layout.as_ref().unwrap().to_owned(),
+            triangle_vertices: triangle_vertices.as_ref().unwrap().to_owned(),
 
             vertex_shader,
             pixel_shader,
@@ -296,9 +316,9 @@ impl WindowApplication {
         Ok(application)
     }
 
-    fn compile_shader(file_name: &str, entry_point: &str, profile: &str) -> ID3DBlob {
-        let compiled_shader: *mut Option<ID3DBlob> = ptr::null_mut();
-        let error_messages: *mut Option<ID3DBlob> = ptr::null_mut();
+    fn compile_shader(file_name: &str, profile: &str) -> ID3DBlob {
+        // let compiled_shader: *mut Option<ID3DBlob> = ptr::null_mut();
+        // let error_messages: *mut Option<ID3DBlob> = ptr::null_mut();
 
         // pub unsafe fn D3DCompileFromFile<P0, P1, P2, P3>(
         //     pfilename: P0, 
@@ -324,70 +344,111 @@ impl WindowApplication {
         //     .chain(Some(0).into_iter()) // Null-terminate the wide string
         //     .collect();
 
-        let path = std::path::Path::new(file_name);
-        let os_str = path.as_os_str();
-
-        let h_string = HSTRING::from(os_str);
 
 
-        unsafe { 
+        let exe_path = std::env::current_exe().ok().unwrap();
+        let asset_path = exe_path.parent().unwrap();
+        let shaders_hlsl_path = asset_path.join(file_name);
+        let shaders_hlsl = shaders_hlsl_path.to_str().unwrap();
+        let shaders_hlsl: HSTRING = shaders_hlsl.into();
+
+        let mut shader = None;
+        let mut error = None;
+   
+        let shader = unsafe {
             D3DCompileFromFile(
-                &h_string,
+                &shaders_hlsl,
                 None,
-                None, // D3D_COMPILE_STANDARD_FILE_INCLUDE,
-                PCSTR::from_raw(entry_point.as_ptr()),
+                None,
+                s!("Main"),
                 PCSTR::from_raw(profile.as_ptr()),
-                D3DCOMPILE_ENABLE_STRICTNESS,
                 0,
-                compiled_shader,
-                Some(error_messages),
-            ).unwrap();
+                0,
+                &mut shader,
+                Some(&mut error),
+            )
         }
+        .map(|()| shader.unwrap());
 
-        let shader = unsafe { std::ptr::read(compiled_shader) };
 
-        shader.as_ref().unwrap().to_owned()
-    }
+        match error {
+            Some(err) => {
+                unsafe { 
+                    let ptr = err.GetBufferPointer() as *const u8;
+                    let size = err.GetBufferSize();
 
-    fn create_vertex_shader(device: &ID3D11Device, file_name: &'static str) -> ID3D11VertexShader {
-        let vertex_shader_blob = Self::compile_shader(file_name, "Main", "vs_5_0");
-
-        let data_slice: &[u8] = unsafe {
-            std::slice::from_raw_parts(vertex_shader_blob.GetBufferPointer() as *const u8, vertex_shader_blob.GetBufferSize())
+                    let msg = String::from_utf8_lossy(std::slice::from_raw_parts(ptr, size));
+                    println!("aaa {:?}", msg);
+                }
+            }
+            None => println!("None i guess"),
         };
 
-        let vertex_shader: *mut Option<ID3D11VertexShader> = ptr::null_mut();
+        shader.unwrap()
 
-        unsafe {
-            device.CreateVertexShader(
-                data_slice,
-                None,
-                Some(vertex_shader),
-            ).unwrap();
-        }
+        // let path = std::path::Path::new(file_name);
+        // let os_str = path.as_os_str();
 
-        unsafe { vertex_shader.as_ref().unwrap().to_owned().unwrap() }
+        // let h_string = HSTRING::from(os_str);
+
+        // unsafe { 
+        //     D3DCompileFromFile(
+        //         &h_string,
+        //         None,
+        //         None, // D3D_COMPILE_STANDARD_FILE_INCLUDE,
+        //         PCSTR::from_raw(entry_point.as_ptr()),
+        //         PCSTR::from_raw(profile.as_ptr()),
+        //         D3DCOMPILE_ENABLE_STRICTNESS,
+        //         0,
+        //         compiled_shader,
+        //         Some(error_messages),
+        //     ).unwrap();
+        // }
+
+        // let shader = unsafe { std::ptr::read(compiled_shader) };
+
+        // shader.as_ref().unwrap().to_owned()
     }
 
-    fn create_pixel_shader(device: &ID3D11Device, file_name: &'static str) -> ID3D11PixelShader {
-        let pixel_shader_blob = Self::compile_shader(file_name, "Main", "ps_5_0");
+    // fn create_vertex_shader(device: &ID3D11Device, file_name: &'static str) -> ID3D11VertexShader {
+    //     let vertex_shader_blob = Self::compile_shader(file_name, "Main", "vs_5_0");
 
-        let data_slice: &[u8] = unsafe {
-            std::slice::from_raw_parts(pixel_shader_blob.GetBufferPointer() as *const u8, pixel_shader_blob.GetBufferSize())
-        };
+    //     let data_slice: &[u8] = unsafe {
+    //         std::slice::from_raw_parts(vertex_shader_blob.GetBufferPointer() as *const u8, vertex_shader_blob.GetBufferSize())
+    //     };
 
-        let pixel_shader: *mut Option<ID3D11PixelShader> = ptr::null_mut();
+    //     let vertex_shader: *mut Option<ID3D11VertexShader> = ptr::null_mut();
 
-        unsafe {
-            device.CreatePixelShader(
-                data_slice,
-                None,
-                Some(pixel_shader),
-            ).unwrap();
-        }
+    //     unsafe {
+    //         device.CreateVertexShader(
+    //             data_slice,
+    //             None,
+    //             Some(vertex_shader),
+    //         ).unwrap();
+    //     }
 
-        unsafe { pixel_shader.as_ref().unwrap().to_owned().unwrap() }
-    }
+    //     unsafe { vertex_shader.as_ref().unwrap().to_owned().unwrap() }
+    // }
+
+    // fn create_pixel_shader(device: &ID3D11Device, file_name: &'static str) -> ID3D11PixelShader {
+    //     let pixel_shader_blob = Self::compile_shader(file_name, "Main", "ps_5_0");
+
+    //     let data_slice: &[u8] = unsafe {
+    //         std::slice::from_raw_parts(pixel_shader_blob.GetBufferPointer() as *const u8, pixel_shader_blob.GetBufferSize())
+    //     };
+
+    //     let pixel_shader: *mut Option<ID3D11PixelShader> = ptr::null_mut();
+
+    //     unsafe {
+    //         device.CreatePixelShader(
+    //             data_slice,
+    //             None,
+    //             Some(pixel_shader),
+    //         ).unwrap();
+    //     }
+
+    //     unsafe { pixel_shader.as_ref().unwrap().to_owned().unwrap() }
+    // }
 
     pub fn run(&mut self) {
         while !self.window.should_close() {

@@ -9,6 +9,6 @@ struct PSOutput {
 
 PSOutput Main(PSInput input) {
     PSOutput output = (PSOutput)0;
-    output.color = float4(input.color, 1.0);
+    output.color = input.color;
     return output;
 }
