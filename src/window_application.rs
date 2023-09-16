@@ -14,6 +14,7 @@ use std::mem::*;
 
 extern crate glfw;
 
+use crate::window::Window;
 
 pub struct VertexPositionColor {
     pub position: XMFLOAT3,
@@ -21,13 +22,10 @@ pub struct VertexPositionColor {
 }
 
 
-pub struct WindowApplication {
-    glfw: glfw::Glfw,
-    window: glfw::Window,
-    events: std::sync::mpsc::Receiver<(f64, glfw::WindowEvent)>,
 
-    window_width: u32,
-    window_height: u32,
+
+pub struct WindowApplication {
+    // window: Window,
 
     dxgi_factory: IDXGIFactory2,
     device: ID3D11Device,
@@ -43,32 +41,34 @@ pub struct WindowApplication {
 }
 
 impl WindowApplication {
-    pub fn new(title: &'static str) -> Result<Self> {
-        let mut glfw = glfw::init(glfw::LOG_ERRORS).unwrap();
-
-        let primary_monitor = unsafe { glfw::ffi::glfwGetPrimaryMonitor() };
-        let video_mode = unsafe { glfw::ffi::glfwGetVideoMode(primary_monitor) };
-        let screen_width = unsafe { u32::try_from((*video_mode).width).unwrap() };
-        let screen_height = unsafe { u32::try_from((*video_mode).height).unwrap() };
-
-        let window_width = (screen_width as f32 * 0.8).round() as u32;
-        let window_height = (screen_height as f32 * 0.8).round() as u32;
-
-        glfw.window_hint(glfw::WindowHint::ScaleToMonitor(false));
-        glfw.window_hint(glfw::WindowHint::ClientApi(glfw::ClientApiHint::NoApi));
-
-        let (mut window, events) = glfw
-            .create_window(window_width, window_height, title, glfw::WindowMode::Windowed)
-            .expect("Failed to create GLFW window.");
-
-        let window_left = screen_width / 2 - window_width / 2;
-        let window_top = screen_height / 2 - window_height / 2;
+    pub fn new(window: &Window) -> Result<Self> {
         
-        window.set_pos(window_left as i32, window_top as i32);
+
+        // let mut glfw = glfw::init(glfw::LOG_ERRORS).unwrap();
+
+        // let primary_monitor = unsafe { glfw::ffi::glfwGetPrimaryMonitor() };
+        // let video_mode = unsafe { glfw::ffi::glfwGetVideoMode(primary_monitor) };
+        // let screen_width = unsafe { u32::try_from((*video_mode).width).unwrap() };
+        // let screen_height = unsafe { u32::try_from((*video_mode).height).unwrap() };
+
+        // let window_width = (screen_width as f32 * 0.8).round() as u32;
+        // let window_height = (screen_height as f32 * 0.8).round() as u32;
+
+        // glfw.window_hint(glfw::WindowHint::ScaleToMonitor(false));
+        // glfw.window_hint(glfw::WindowHint::ClientApi(glfw::ClientApiHint::NoApi));
+
+        // let (mut window, events) = glfw
+        //     .create_window(window_width, window_height, title, glfw::WindowMode::Windowed)
+        //     .expect("Failed to create GLFW window.");
+
+        // let window_left = screen_width / 2 - window_width / 2;
+        // let window_top = screen_height / 2 - window_height / 2;
         
-        // window.make_current();
-        window.set_key_polling(true);
-        window.set_framebuffer_size_polling(true);
+        // window.set_pos(window_left as i32, window_top as i32);
+        
+        // window.set_key_polling(true);
+        // window.set_framebuffer_size_polling(true);
+
 
         let dxgi_factory: IDXGIFactory2 = unsafe { CreateDXGIFactory1()? };
     
@@ -105,8 +105,8 @@ impl WindowApplication {
         let device_unwrapped = device.unwrap();
 
         let swap_chain_descriptor = DXGI_SWAP_CHAIN_DESC1 {
-            Width: window_width,
-            Height: window_height,
+            Width: window.window_width,
+            Height: window.window_height,
             Format: DXGI_FORMAT_B8G8R8A8_UNORM,
             SampleDesc: DXGI_SAMPLE_DESC {
                 Count: 1,
@@ -124,8 +124,10 @@ impl WindowApplication {
         };
 
 
-        let window_handle = window.get_win32_window();
-        let hwnd: HWND = unsafe { std::mem::transmute(window_handle) };
+        // let window_handle = window.get_win32_window();
+        // let hwnd: HWND = unsafe { std::mem::transmute(window_handle) };
+
+        let hwnd = window.get_win32();
 
         let swap_chain: IDXGISwapChain1;
 
@@ -255,8 +257,7 @@ impl WindowApplication {
                 data_slice_vertex,
                 Some(&mut vertex_layout),
             )
-        }
-        .map(|()| vertex_layout.unwrap());
+        }.map(|()| vertex_layout.unwrap());
 
 
         let vertices: [VertexPositionColor; 3] = [
@@ -291,14 +292,8 @@ impl WindowApplication {
             ).unwrap();
         }
 
-
         let application = WindowApplication { 
-            glfw,
-            window,
-            events,
-
-            window_height,
-            window_width,
+            // window,
 
             dxgi_factory,
             device: device_unwrapped,
@@ -450,34 +445,13 @@ impl WindowApplication {
     //     unsafe { pixel_shader.as_ref().unwrap().to_owned().unwrap() }
     // }
 
-    pub fn run(&mut self) {
-        while !self.window.should_close() {
-            for (_, event) in glfw::flush_messages(&self.events) {
-                println!("Got event: {:?}", event);
-    
-                match event {
-                    glfw::WindowEvent::FramebufferSize(_width, _height) => {}
-                    glfw::WindowEvent::Key(glfw::Key::Escape, _, glfw::Action::Press, _) => {
-                        self.window.set_should_close(true);
-                    }
-                    _ => {}
-                };
-            }
-        
-            self.render();
-        
-            // window.swap_buffers();
-            self.glfw.poll_events();
-        }
-    }
-
-    fn render(&self) {
+    pub fn render(&self, viewport_size: (u32, u32)) {
 
         let viewport = D3D11_VIEWPORT {
             TopLeftX: 0f32,
             TopLeftY: 0f32,
-            Width: self.window_width as f32,
-            Height: self.window_height as f32,
+            Width: viewport_size.0 as f32, // self.window.window_width as f32,
+            Height: viewport_size.1 as f32, // self.window.window_height as f32,
             MinDepth: 0f32,
             MaxDepth: 1f32,
         };
@@ -514,6 +488,58 @@ impl WindowApplication {
         };
 
     }
+
+    // pub fn run(&mut self) {
+    //     while !self.window.window.should_close() {
+    //         for (_, event) in glfw::flush_messages(&self.window.events) {
+    //             println!("Got window event: {:?}", event);
+    
+    //             match event {
+    //                 glfw::WindowEvent::FramebufferSize(_width, _height) => {
+                        
+    //                 }
+    //                 glfw::WindowEvent::Key(glfw::Key::Enter, _, glfw::Action::Press, _) => {
+    //                     self.window.window.with_window_mode(|mode| {
+    //                         match mode {
+    //                             glfw::WindowMode::Windowed => println!("Windowed"),
+    //                             glfw::WindowMode::FullScreen(monitor) => println!("FullScreen({:?})", monitor.get_name()),
+    //                         }
+    //                     });
+
+    //                     let monitor = glfw::Monitor::from_window(&self.window.window);
+    //                     println!("got monitor {:?}", monitor);
+
+    //                     self.window.glfw.with_connected_monitors(|_, monitors| {
+    //                         for monitor in monitors.iter() {
+    //                             println!("{:?}: {:?}", monitor.get_name(), monitor.get_video_mode());
+    //                         }
+    //                     });
+
+    //                     // let video_mode = monitor.get_video_mode();
+    //                     // println!("got video mode");
+    //                     // let video_mode = video_mode.expect("asdsd");
+    //                     // println!("got video mode2");
+                        
+    //                     // self.window.window.set_pos(0, 0);
+    //                     // self.window.window.set_size(2560, 1440);
+
+    //                     // self.window.window.set_monitor(glfw::WindowMode::FullScreen(&monitor), 0, 0, video_mode.width, video_mode.height, Some(video_mode.refresh_rate));
+    //                     // println!("got set monitor");
+    //                 }
+    //                 glfw::WindowEvent::Key(glfw::Key::Escape, _, glfw::Action::Press, _) => {
+    //                     println!("Closing the window.");
+    //                     self.window.window.set_should_close(true);
+    //                 }
+    //                 _ => {}
+    //             };
+    //         }
+        
+    //         self.render();
+        
+    //         // window.swap_buffers();
+    //         self.window.glfw.poll_events();
+    //     }
+    // }
 
     fn _cleanup(&self) {
 
