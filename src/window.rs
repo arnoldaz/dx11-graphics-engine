@@ -1,11 +1,15 @@
 
 pub struct Window {
-    pub glfw: glfw::Glfw,
-    pub window: glfw::Window,
-    pub events: std::sync::mpsc::Receiver<(f64, glfw::WindowEvent)>,
+    glfw: glfw::Glfw,
+    window: glfw::Window,
+    events: std::sync::mpsc::Receiver<(f64, glfw::WindowEvent)>,
 
     pub window_width: u32,
     pub window_height: u32,
+    pub is_fullscreen: bool,
+
+    last_window_position: (i32, i32),
+    last_window_size: (u32, u32),
 }
 
 impl Window {
@@ -35,7 +39,10 @@ impl Window {
         window.set_key_polling(true);
         window.set_framebuffer_size_polling(true);
 
-        Ok(Window { glfw, window, events, window_width, window_height })
+        Ok(Window { glfw, window, events, window_width, window_height, is_fullscreen: false, 
+            last_window_position: (window_left as i32, window_top as i32),
+            last_window_size: (window_width, window_height)
+        })
     }
 
     pub fn get_win32(&self) -> windows::Win32::Foundation::HWND {
@@ -43,51 +50,69 @@ impl Window {
         unsafe { std::mem::transmute(window_handle) }
     }
 
-    pub fn run<'a>(&mut self, render_callback: Box<dyn Fn((u32, u32)) + 'a>) {
+    pub fn run<'a>(&mut self, render_callback: Box<dyn Fn((u32, u32)) + 'a>, resize_callback: Box<dyn Fn((u32, u32)) + 'a>) {
         while !self.window.should_close() {
             for (_, event) in glfw::flush_messages(&self.events) {
                 println!("Got window event: {:?}", event);
     
                 match event {
-                    glfw::WindowEvent::FramebufferSize(_width, _height) => {
-                        
+                    glfw::WindowEvent::FramebufferSize(width, height) => {
+                        self.window_width = width as u32;
+                        self.window_height = height as u32;
+
+                        resize_callback((self.window_width, self.window_height));
                     }
                     glfw::WindowEvent::Key(glfw::Key::Enter, _, glfw::Action::Press, _) => {
-                        self.window.with_window_mode(|mode| {
-                            match mode {
-                                glfw::WindowMode::Windowed => println!("Windowed"),
-                                glfw::WindowMode::FullScreen(monitor) => println!("FullScreen({:?})", monitor.get_name()),
-                            }
-                        });
+                        if self.is_fullscreen {
+                            self.window.set_monitor(glfw::WindowMode::Windowed,
+                                self.last_window_position.0, self.last_window_position.1,
+                                self.last_window_size.0, self.last_window_size.1,
+                                None,
+                            );
+                        } else {
+                            let window_position = self.window.get_pos();
+                            let window_size = self.window.get_size();
 
-                        let monitor = glfw::Monitor::from_window(&self.window);
-                        println!("got monitor {:?}", monitor);
+                            self.last_window_position = window_position;
+                            self.last_window_size = (window_size.0 as u32, window_size.1 as u32);
 
-                        self.glfw.with_connected_monitors(|_, monitors| {
-                            for monitor in monitors.iter() {
-                                println!("{:?}: {:?}", monitor.get_name(), monitor.get_video_mode());
-                            }
-                        });
+                            self.glfw.with_connected_monitors(|_, monitors| {
+                                let mut highest_overlap = 0;
+                                let mut best_monitor: Option<&glfw::Monitor> = None;
+                    
+                                for monitor in monitors.iter() {
+                                    let video_mode = monitor.get_video_mode().unwrap();
+                                    let monitor_position = monitor.get_pos();
 
-                        // let video_mode = monitor.get_video_mode();
-                        // println!("got video mode");
-                        // let video_mode = video_mode.expect("asdsd");
-                        // println!("got video mode2");
-                        
-                        // self.window.set_pos(0, 0);
-                        // self.window.set_size(2560, 1440);
+                                    let overlap_area = Self::intersecting_area(window_position, window_size, monitor_position, (video_mode.width as i32, video_mode.height as i32));
+                                    println!("Intersecting area for monitor {:?}: {:?}", monitor.get_name(), overlap_area);
 
-                        // self.window.set_monitor(glfw::WindowMode::FullScreen(&monitor), 0, 0, video_mode.width, video_mode.height, Some(video_mode.refresh_rate));
-                        // println!("got set monitor");
+                                    if overlap_area > highest_overlap {
+                                        highest_overlap = overlap_area;
+                                        best_monitor = Some(monitor);
+                                    }
+                                }
+    
+                                let monitor = best_monitor.unwrap();
+                                let video_mode = monitor.get_video_mode().unwrap();
+
+                                self.window.set_monitor(glfw::WindowMode::FullScreen(monitor),
+                                    0, 0,
+                                    video_mode.width, video_mode.height,
+                                    Some(video_mode.refresh_rate)
+                                );
+                            });
+                        }
+
+                        self.is_fullscreen = !self.is_fullscreen;
                     }
                     glfw::WindowEvent::Key(glfw::Key::Escape, _, glfw::Action::Press, _) => {
-                        println!("Closing the window.");
                         self.window.set_should_close(true);
                     }
                     _ => {}
                 };
             }
-        
+
             render_callback((self.window_width, self.window_height));
         
             // window.swap_buffers();
@@ -96,32 +121,6 @@ impl Window {
     }
 
 
-    // fn get_current_monitor<'a>(glfw: &mut glfw::Glfw, window: &glfw::Window) -> &'a glfw::Monitor {
-    //     let window_pos = window.get_pos();
-    //     let window_size = window.get_size();
-
-    //     let mut highest_overlap = 0;
-    //     // let mut best_monitor: Option<&glfw::Monitor> = None;
-    //     let mut best_monitor: Option<&'a glfw::Monitor> = None;
-        
-    //     glfw.with_connected_monitors(|_, monitors| {
-
-    //         for monitor in monitors.iter() {
-    //             let video_mode = monitor.get_video_mode().unwrap();
-    //             let monitor_pos = monitor.get_pos();
-
-    //             let overlap_area = Self::intersecting_area(window_pos, window_size, monitor_pos, (video_mode.width as i32, video_mode.height as i32));
-    //             println!("Intersecting area for monitor {:?}: {:?}", monitor.get_name(), overlap_area);
-
-    //             if overlap_area > highest_overlap {
-    //                 highest_overlap = overlap_area;
-    //                 best_monitor = Some(monitor);
-    //             }
-    //         }
-
-    //         best_monitor.unwrap()
-    //     })
-    // }
 
     /// Calculates shared intersecting area between 2 rectangles defined by their top left points and sizes.
     fn intersecting_area(rectangle_1_position: (i32, i32), rectangle_1_size: (i32, i32), rectangle_2_position: (i32, i32), rectangle_2_size: (i32, i32)) -> i32 {

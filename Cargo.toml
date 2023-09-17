@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 directx_math = "0.2.2"
 glfw = "0.52.0"
+imgui = "0.11.0"
 
 [dependencies.windows]
 version = "0.51.1"

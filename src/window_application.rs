@@ -69,9 +69,17 @@ impl WindowApplication {
         // window.set_key_polling(true);
         // window.set_framebuffer_size_polling(true);
 
+        // unsafe {
+        //     let mut debug: Option<windows::Win32::Graphics::Direct3D12::ID3D12Debug> = None;
+        //     if let Some(debug) = windows::Win32::Graphics::Direct3D12::D3D12GetDebugInterface(&mut debug).ok().and(debug) {
+        //         debug.EnableDebugLayer();
+        //     }
+        // }
 
         let dxgi_factory: IDXGIFactory2 = unsafe { CreateDXGIFactory1()? };
     
+        // let dxgi_factory: IDXGIFactory2 = unsafe { CreateDXGIFactory2(DXGI_CREATE_FACTORY_DEBUG )? };
+
         let mut device: Option<ID3D11Device> = None;
 
         // pub unsafe fn D3D11CreateDevice<P0, P1>(
@@ -93,7 +101,7 @@ impl WindowApplication {
                 None,
                 D3D_DRIVER_TYPE_HARDWARE,
                 HINSTANCE::default(),
-                D3D11_CREATE_DEVICE_DEBUG,
+                D3D11_CREATE_DEVICE_DEBUG | D3D11_CREATE_DEVICE_BGRA_SUPPORT,
                 Some(&[D3D_FEATURE_LEVEL_11_0]),
                 D3D11_SDK_VERSION,
                 Some(&mut device),
@@ -104,9 +112,14 @@ impl WindowApplication {
 
         let device_unwrapped = device.unwrap();
 
+        let debug: &ID3D11Debug = unsafe { ID3D11Debug::from_raw_borrowed(&device_unwrapped.abi()).unwrap() };
+
+        // println!("{:?}", debug);
+
+        // (2560, 1440)
         let swap_chain_descriptor = DXGI_SWAP_CHAIN_DESC1 {
-            Width: window.window_width,
-            Height: window.window_height,
+            Width: 2560, //window.window_width,
+            Height: 1440, //window.window_height,
             Format: DXGI_FORMAT_B8G8R8A8_UNORM,
             SampleDesc: DXGI_SAMPLE_DESC {
                 Count: 1,
@@ -261,9 +274,9 @@ impl WindowApplication {
 
 
         let vertices: [VertexPositionColor; 3] = [
-            VertexPositionColor { position: XMFLOAT3 { x:  0.0, y:  0.5, z: 0.0 }, color: XMFLOAT3 { x: 0.25, y: 0.39, z: 0.19 } },
-            VertexPositionColor { position: XMFLOAT3 { x:  0.5, y: -0.5, z: 0.0 }, color: XMFLOAT3 { x: 0.44, y: 0.75, z: 0.35 } },
-            VertexPositionColor { position: XMFLOAT3 { x: -0.5, y: -0.5, z: 0.0 }, color: XMFLOAT3 { x: 1.0, y: 1.0, z: 0.20 } },
+            VertexPositionColor { position: XMFLOAT3 { x:  0.0, y:  1.0, z: 0.0 }, color: XMFLOAT3 { x: 0.25, y: 0.39, z: 1.0 } },
+            VertexPositionColor { position: XMFLOAT3 { x:  1.0, y: -1.0, z: 0.0 }, color: XMFLOAT3 { x: 0.44, y: 0.75, z: 0.35 } },
+            VertexPositionColor { position: XMFLOAT3 { x: -1.0, y: -1.0, z: 0.0 }, color: XMFLOAT3 { x: 1.0, y: 1.0, z: 0.20 } },
         ];
 
         let buffer_info = D3D11_BUFFER_DESC {
@@ -312,35 +325,6 @@ impl WindowApplication {
     }
 
     fn compile_shader(file_name: &str, profile: &str) -> ID3DBlob {
-        // let compiled_shader: *mut Option<ID3DBlob> = ptr::null_mut();
-        // let error_messages: *mut Option<ID3DBlob> = ptr::null_mut();
-
-        // pub unsafe fn D3DCompileFromFile<P0, P1, P2, P3>(
-        //     pfilename: P0, 
-        //     pdefines: ::core::option::Option<*const super::D3D_SHADER_MACRO>,
-        //      pinclude: P1,
-        //      pentrypoint: P2,
-        //      ptarget: P3,
-        //      flags1: u32,
-        //      flags2: u32,
-        //      ppcode: *mut ::core::option::Option<super::ID3DBlob>,
-        //      pperrormsgs: ::core::option::Option<*mut ::core::option::Option<super::ID3DBlob>>) -> ::windows_core::Result<()>
-        // where
-        //     P0: ::windows_core::IntoParam<::windows_core::PCWSTR>,
-        //     P1: ::windows_core::IntoParam<super::ID3DInclude>,
-        //     P2: ::windows_core::IntoParam<::windows_core::PCSTR>,
-        //     P3: ::windows_core::IntoParam<::windows_core::PCSTR>,
-        // {
-
-            
-
-        // let wide_file_name: Vec<u16> = std::ffi::OsStr::new(&file_name)
-        //     .encode_wide()
-        //     .chain(Some(0).into_iter()) // Null-terminate the wide string
-        //     .collect();
-
-
-
         let exe_path = std::env::current_exe().ok().unwrap();
         let asset_path = exe_path.parent().unwrap();
         let shaders_hlsl_path = asset_path.join(file_name);
@@ -450,8 +434,10 @@ impl WindowApplication {
         let viewport = D3D11_VIEWPORT {
             TopLeftX: 0f32,
             TopLeftY: 0f32,
-            Width: viewport_size.0 as f32, // self.window.window_width as f32,
-            Height: viewport_size.1 as f32, // self.window.window_height as f32,
+            Width: 2560.0, //window.window_width,
+            Height: 1440.0, //window.window_height,
+            // Width: viewport_size.0 as f32, // self.window.window_width as f32,
+            // Height: viewport_size.1 as f32, // self.window.window_height as f32,
             MinDepth: 0f32,
             MaxDepth: 1f32,
         };
@@ -487,6 +473,26 @@ impl WindowApplication {
             let _ = self.swap_chain.Present(1, 0); 
         };
 
+    }
+
+    pub fn on_resize(&self, swap_chain_buffer_size: (u32, u32)) {
+
+        // unsafe { 
+
+        //     self.device_context.OMSetRenderTargets(None, None);
+        //     self.device_context.Flush();
+
+        // };
+
+        // unsafe { 
+        //     self.swap_chain.ResizeBuffers(
+        //         0,
+        //         swap_chain_buffer_size.0,
+        //         swap_chain_buffer_size.1,
+        //         DXGI_FORMAT_UNKNOWN,
+        //         0,
+        //     ).unwrap();
+        // };
     }
 
     // pub fn run(&mut self) {
