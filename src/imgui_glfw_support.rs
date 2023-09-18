@@ -52,19 +52,21 @@ struct Clipboard {
 }
 
 impl imgui::ClipboardBackend for Clipboard {
-    fn set(&mut self, s: &imgui::ImStr) {
+    fn set(&mut self, s: &str) {
         unsafe {
-            glfw::ffi::glfwSetClipboardString(self.window_ptr, s.as_ptr());
+            glfw::with_c_str(s, |s| {
+                glfw::ffi::glfwSetClipboardString(self.window_ptr, s);
+            });
         }
     }
-    fn get(&mut self) -> std::option::Option<imgui::ImString> {
+    fn get(&mut self) -> std::option::Option<std::string::String> {
         unsafe {
             let s = glfw::ffi::glfwGetClipboardString(self.window_ptr);
             let s = std::ffi::CStr::from_ptr(s);
             let bytes = s.to_bytes();
             if !bytes.is_empty() {
                 let v = String::from_utf8_lossy(bytes);
-                Some(imgui::ImString::new(v))
+                Some(v.to_string())
             } else {
                 None
             }
@@ -109,17 +111,14 @@ impl GlfwPlatform {
         io[Key::Space] = GlfwKey::Space as _;
         io[Key::Enter] = GlfwKey::Enter as _;
         io[Key::Escape] = GlfwKey::Escape as _;
-        io[Key::KeyPadEnter] = GlfwKey::KpEnter as _;
+        // io[Key::KeyPadEnter] = GlfwKey::KpEnter as _;
         io[Key::A] = GlfwKey::A as _;
         io[Key::C] = GlfwKey::C as _;
         io[Key::V] = GlfwKey::V as _;
         io[Key::X] = GlfwKey::X as _;
         io[Key::Y] = GlfwKey::Y as _;
         io[Key::Z] = GlfwKey::Z as _;
-        imgui.set_platform_name(Some(ImString::from(format!(
-            "imgui-glfw-support {}",
-            env!("CARGO_PKG_VERSION")
-        ))));
+        imgui.set_platform_name(Some("glfw".to_string()));
         GlfwPlatform {
             hidpi_mode: ActiveHiDpiMode::Default,
             hidpi_factor: 1.0,
@@ -132,7 +131,7 @@ impl GlfwPlatform {
     pub unsafe fn set_clipboard_backend(&self, imgui: &mut Context, window: &Window) {
         use glfw::Context;
         let window_ptr = window.window_ptr();
-        imgui.set_clipboard_backend(Box::new(Clipboard { window_ptr }));
+        imgui.set_clipboard_backend(Clipboard { window_ptr });
     }
 
     /// Attaches the platform instance to a glfw window.
