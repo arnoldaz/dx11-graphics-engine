@@ -62,10 +62,10 @@ impl Renderer {
         let vertex_buffer = Self::create_vertex_buffer(device, 0)?;
         let index_buffer = Self::create_index_buffer(device, 0)?;
 
-        let mut context = device.GetImmediateContext()?;
+        let context = device.GetImmediateContext()?;
 
         im_ctx.io_mut().backend_flags |= BackendFlags::RENDERER_HAS_VTX_OFFSET;
-        let renderer_name = concat!("imgui_dx11_renderer@", env!("CARGO_PKG_VERSION"));
+        let renderer_name = "imgui_dx11_renderer";
         im_ctx.set_renderer_name(Some(renderer_name.parse().unwrap()));
 
         Ok(Renderer {

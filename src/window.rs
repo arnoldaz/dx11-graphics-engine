@@ -1,7 +1,9 @@
+use crate::window_ui::WindowUi;
+
 
 pub struct Window {
     glfw: glfw::Glfw,
-    window: glfw::Window,
+    pub window: glfw::Window,
     events: std::sync::mpsc::Receiver<(f64, glfw::WindowEvent)>,
 
     pub window_width: u32,
@@ -50,8 +52,16 @@ impl Window {
         unsafe { std::mem::transmute(window_handle) }
     }
 
-    pub fn run<'a>(&mut self, render_callback: Box<dyn Fn((u32, u32)) + 'a>, resize_callback: Box<dyn Fn((u32, u32)) + 'a>) {
+    pub fn run<'a>(&mut self, render_callback: Box<dyn Fn((u32, u32)) + 'a>, resize_callback: Box<dyn Fn((u32, u32)) + 'a>, window_ui: &mut WindowUi) {
+        let mut last_frame = std::time::Instant::now();
+
         while !self.window.should_close() {
+            let now = std::time::Instant::now();
+            window_ui.imgui
+                .io_mut()
+                .update_delta_time(now.duration_since(last_frame));
+            last_frame = now;
+
             for (_, event) in glfw::flush_messages(&self.events) {
                 println!("Got window event: {:?}", event);
     
@@ -115,6 +125,17 @@ impl Window {
 
             render_callback((self.window_width, self.window_height));
         
+            let ui = window_ui.imgui.frame();
+            ui.show_demo_window(&mut true);
+
+            window_ui.platform.prepare_render(ui, &mut self.window);
+            let draw_data = window_ui.imgui.render();
+
+            // This is the only extra render step to add
+            window_ui.renderer
+                .render(draw_data)
+                .expect("error rendering imgui");
+
             // window.swap_buffers();
             self.glfw.poll_events();
         }

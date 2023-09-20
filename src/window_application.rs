@@ -28,7 +28,7 @@ pub struct WindowApplication {
     // window: Window,
 
     dxgi_factory: IDXGIFactory2,
-    device: ID3D11Device,
+    pub device: ID3D11Device,
     device_context: ID3D11DeviceContext,
     swap_chain: IDXGISwapChain1,
     render_target: ID3D11RenderTargetView,
