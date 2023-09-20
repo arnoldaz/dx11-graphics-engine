@@ -15,7 +15,7 @@ pub struct Window {
 impl Window {
 
     pub fn new(title: &'static str) -> Result<Self, Box<dyn std::error::Error>> {
-        let mut glfw = glfw::init(glfw::LOG_ERRORS)?;
+        let mut glfw = glfw::init_no_callbacks()?;
 
         let primary_monitor = glfw::Monitor::from_primary();
         let video_mode = primary_monitor.get_video_mode()
