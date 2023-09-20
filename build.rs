@@ -9,12 +9,12 @@ fn main() {
     .expect("Copy");
     std::fs::copy(
         "src/vertex_shader.vs_4_0",
-        std::env::var("OUT_DIR").unwrap() + "/vertex_shader.vs_4_0",
+        std::env::var("OUT_DIR").unwrap() + "/../../../vertex_shader.vs_4_0",
     )
     .expect("Copy");
     std::fs::copy(
         "src/pixel_shader.ps_4_0",
-        std::env::var("OUT_DIR").unwrap() + "/pixel_shader.ps_4_0",
+        std::env::var("OUT_DIR").unwrap() + "/../../../pixel_shader.ps_4_0",
     )
     .expect("Copy");
 }

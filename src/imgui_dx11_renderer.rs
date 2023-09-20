@@ -17,6 +17,8 @@ use windows::Win32::Graphics::Direct3D11::*;
 use windows::Win32::Graphics::Dxgi::Common::*;
 use windows::Win32::Graphics::Dxgi::*;
 
+use crate::window_application::WindowApplication;
+
 const FONT_TEX_ID: usize = !0;
 
 const VERTEX_BUF_ADD_CAPACITY: usize = 5000;
@@ -236,11 +238,21 @@ impl Renderer {
             StructureByteStride: 0,
         };
 
-        let buffer = None;
-        let buffer = device.CreateBuffer(&desc, None, buffer)
-            .map(|()| buffer.unwrap().as_ref().unwrap().as_ref().unwrap())?;
+        let mut buffer = None;
+        unsafe { 
+            device.CreateBuffer(
+                &desc,
+                None,
+                Some(&mut buffer),
+            ).unwrap();
+        }
 
-        Ok(Buffer(buffer.clone(), len))
+
+        // let buffer = None;
+        // let buffer = device.CreateBuffer(&desc, None, buffer)
+        //     .map(|()| buffer.unwrap().as_ref().unwrap().as_ref().unwrap())?;
+
+        Ok(Buffer(buffer.unwrap(), len))
     }
 
     unsafe fn create_index_buffer(device: &ID3D11Device, idx_count: usize) -> Result<Buffer> {
@@ -254,15 +266,35 @@ impl Renderer {
             StructureByteStride: 0,
         };
 
-        let buffer = None;
-        let buffer = device.CreateBuffer(&desc, None, buffer)
-            .map(|()| buffer.unwrap().as_ref().unwrap().as_ref().unwrap())?;
+        let mut buffer = None;
+        unsafe { 
+            device.CreateBuffer(
+                &desc,
+                None,
+                Some(&mut buffer),
+            ).unwrap();
+        }
+
+        // let buffer = None;
+        // let buffer = device.CreateBuffer(&desc, None, buffer)
+        //     .map(|()| buffer.unwrap().as_ref().unwrap().as_ref().unwrap())?;
 
 
-        Ok(Buffer(buffer.clone(), len))
+        Ok(Buffer(buffer.unwrap(), len))
     }
 
     unsafe fn write_buffers(&self, draw_data: &DrawData) -> Result<()> {
+        // let vtx_resource = None;
+        // unsafe { 
+        //     self.context.Map(
+        //         self.vertex_buffer.get_buf(),
+        //         0,
+        //         D3D11_MAP_WRITE_DISCARD,
+        //         0,
+        //         vtx_resource,
+        //     );
+        // }
+
         let vtx_resource = None;
         let vtx_resource = self.context.Map(self.vertex_buffer.get_buf(), 0, D3D11_MAP_WRITE_DISCARD, 0, vtx_resource)
             .map(|()| *vtx_resource.unwrap())?;
@@ -272,7 +304,7 @@ impl Renderer {
             .map(|()| *idx_resource.unwrap())?;
 
         let mut vtx_dst = slice::from_raw_parts_mut(
-            vtx_resource.pData.cast::<DrawVert>(),
+            vtx_resource_unwrapped.pData.cast::<DrawVert>(),
             draw_data.total_vtx_count as usize,
         );
         let mut idx_dst = slice::from_raw_parts_mut(
@@ -335,9 +367,19 @@ impl Renderer {
             SysMemSlicePitch: 0,
         };
 
-        let texture = None;
-        let texture = device.CreateTexture2D(&desc, Some(&sub_resource), texture)
-            .map(|()| texture.unwrap().as_ref().unwrap().as_ref().unwrap())?;
+        let mut texture = None;
+        unsafe { 
+            device.CreateTexture2D(
+                &desc,
+                Some(&sub_resource),
+                Some(&mut texture),
+            ).unwrap();
+        }
+
+
+        // let texture = None;
+        // let texture = device.CreateTexture2D(&desc, Some(&sub_resource), texture)
+        //     .map(|()| texture.unwrap().as_ref().unwrap().as_ref().unwrap())?;
 
         let mut srv_desc = D3D11_SHADER_RESOURCE_VIEW_DESC {
             Format: DXGI_FORMAT_R8G8B8A8_UNORM,
@@ -347,9 +389,19 @@ impl Renderer {
         srv_desc.Anonymous.Texture2D.MipLevels = desc.MipLevels;
         srv_desc.Anonymous.Texture2D.MostDetailedMip = 0;
 
-        let font_texture_view = None;
-        let font_texture_view = device.CreateShaderResourceView(texture, Some(&srv_desc), font_texture_view)
-            .map(|()| font_texture_view.unwrap().as_ref().unwrap().as_ref().unwrap())?;
+        let mut font_texture_view = None;
+        unsafe { 
+            device.CreateShaderResourceView(
+                &texture.unwrap(),
+                Some(&srv_desc),
+                Some(&mut font_texture_view),
+            ).unwrap();
+        }
+
+
+        // let font_texture_view = None;
+        // let font_texture_view = device.CreateShaderResourceView(&texture.unwrap(), Some(&srv_desc), font_texture_view)
+        //     .map(|()| font_texture_view.unwrap().as_ref().unwrap().as_ref().unwrap())?;
 
         fonts.tex_id = TextureId::from(FONT_TEX_ID);
 
@@ -365,21 +417,53 @@ impl Renderer {
             ..Default::default()
         };
 
-        let font_sampler = None;
-        let font_sampler = device.CreateSamplerState(&desc, font_sampler)
-            .map(|()| font_sampler.unwrap().as_ref().unwrap().as_ref().unwrap())?;
+        let mut font_sampler = None;
+        unsafe { 
+            device.CreateSamplerState(
+                &desc,
+                Some(&mut font_sampler),
+            ).unwrap();
+        }
 
-        Ok((font_texture_view.clone(), font_sampler.clone()))
+        // let font_sampler = None;
+        // let font_sampler = device.CreateSamplerState(&desc, font_sampler)
+        //     .map(|()| font_sampler.unwrap().as_ref().unwrap().as_ref().unwrap())?;
+
+        Ok((font_texture_view.unwrap(), font_sampler.unwrap()))
     }
 
     unsafe fn create_vertex_shader(
         device: &ID3D11Device,
     ) -> Result<(ID3D11VertexShader, ID3D11InputLayout, ID3D11Buffer)> {
-        const VERTEX_SHADER: &[u8] =
-            include_bytes!(concat!(env!("OUT_DIR"), "/vertex_shader.vs_4_0"));
-        let vs_shader = None;
-        let vs_shader = device.CreateVertexShader(VERTEX_SHADER, None, vs_shader)
-            .map(|()| vs_shader.unwrap().as_ref().unwrap().as_ref().unwrap())?;
+
+
+        let vertex_shader_blob = WindowApplication::compile_shader("vertex_shader.vs_4_0", "vs_5_0");
+
+        let data_slice_vertex: &[u8] = unsafe {
+            std::slice::from_raw_parts(vertex_shader_blob.GetBufferPointer() as *const u8, vertex_shader_blob.GetBufferSize())
+        };
+
+
+        // const VERTEX_SHADER: &[u8] =
+        //     include_bytes!(concat!(env!("OUT_DIR"), "/vertex_shader.vs_4_0"));
+
+
+        let mut vs_shader = None;
+
+        unsafe {
+            device.CreateVertexShader(
+                data_slice_vertex,
+                None,
+                Some(&mut vs_shader),
+            ).unwrap();
+        }
+
+        let vs_shader = vs_shader.as_ref().unwrap().to_owned();
+
+
+        // let vs_shader = None;
+        // let vs_shader = device.CreateVertexShader(VERTEX_SHADER, None, vs_shader)
+        //     .map(|()| vs_shader.unwrap().as_ref().unwrap().as_ref().unwrap())?;
 
         let local_layout = [
             D3D11_INPUT_ELEMENT_DESC {
@@ -411,9 +495,18 @@ impl Renderer {
             },
         ];
 
-        let input_layout = None;
-        let input_layout = device.CreateInputLayout(&local_layout, VERTEX_SHADER, input_layout)
-            .map(|()| input_layout.unwrap().as_ref().unwrap().as_ref().unwrap())?;
+        let mut input_layout = None;
+
+        unsafe { 
+            device.CreateInputLayout(
+                &local_layout,
+                data_slice_vertex,
+                Some(&mut input_layout),
+            ).unwrap();
+        }
+
+        // let input_layout = device.CreateInputLayout(&local_layout, data_slice_vertex, input_layout)
+        //     .map(|()| input_layout.unwrap().as_ref().unwrap().as_ref().unwrap())?;
 
         let desc = D3D11_BUFFER_DESC {
             ByteWidth: mem::size_of::<VertexConstantBuffer>() as _,
@@ -424,20 +517,52 @@ impl Renderer {
             StructureByteStride: 0,
         };
         
-        let vertex_constant_buffer = None;
-        let vertex_constant_buffer = device.CreateBuffer(&desc, None, vertex_constant_buffer)
-            .map(|()| vertex_constant_buffer.unwrap().as_ref().unwrap().as_ref().unwrap())?;
 
-        Ok((vs_shader.clone(), input_layout.clone(), vertex_constant_buffer.clone()))
+        let mut vertex_constant_buffer = None;
+
+        unsafe { 
+            device.CreateBuffer(
+                &desc,
+                None,
+                Some(&mut vertex_constant_buffer),
+            ).unwrap();
+        }
+
+        // let vertex_constant_buffer = None;
+        // let vertex_constant_buffer = device.CreateBuffer(&desc, None, vertex_constant_buffer)
+        //     .map(|()| vertex_constant_buffer.unwrap().as_ref().unwrap().as_ref().unwrap())?;
+
+        Ok((vs_shader.clone(), input_layout.unwrap(), vertex_constant_buffer.unwrap()))
     }
 
     unsafe fn create_pixel_shader(device: &ID3D11Device) -> Result<ID3D11PixelShader> {
-        const PIXEL_SHADER: &[u8] =
-            include_bytes!(concat!(env!("OUT_DIR"), "/pixel_shader.ps_4_0"));
+        let pixel_shader_blob = WindowApplication::compile_shader("pixel_shader.ps_4_0", "ps_5_0");
 
-        let vs_shader = None;
-        device.CreatePixelShader(PIXEL_SHADER, None, vs_shader)
-            .map(|()| vs_shader.unwrap().as_ref().unwrap().as_ref().unwrap().clone())
+        let data_slice_pixel: &[u8] = unsafe {
+            std::slice::from_raw_parts(pixel_shader_blob.GetBufferPointer() as *const u8, pixel_shader_blob.GetBufferSize())
+        };
+
+        // let pixel_shader: *mut Option<ID3D11PixelShader> = ptr::null_mut();
+
+        let mut pixel_shader = None;
+
+        unsafe {
+            device.CreatePixelShader(
+                data_slice_pixel,
+                None,
+                Some(&mut pixel_shader),
+            ).unwrap();
+        }
+
+        Ok(pixel_shader.as_ref().unwrap().to_owned())
+
+
+        // const PIXEL_SHADER: &[u8] =
+        //     include_bytes!(concat!(env!("OUT_DIR"), "/pixel_shader.ps_4_0"));
+
+        // let vs_shader = None;
+        // device.CreatePixelShader(PIXEL_SHADER, None, vs_shader)
+        //     .map(|()| vs_shader.unwrap().as_ref().unwrap().as_ref().unwrap().clone())
     }
 
     unsafe fn create_device_objects(
@@ -457,9 +582,20 @@ impl Renderer {
                 RenderTargetWriteMask: D3D11_COLOR_WRITE_ENABLE_ALL.0 as u8,
             }; 8],
         };
-        let blend_state = None;
-        let blend_state = device.CreateBlendState(&desc, blend_state)
-            .map(|()| blend_state.unwrap().as_ref().unwrap().as_ref().unwrap())?;
+
+
+        let mut blend_state = None;
+
+        unsafe { 
+            device.CreateBlendState(
+                &desc,
+                Some(&mut blend_state),
+            ).unwrap();
+        }
+
+        // let blend_state = None;
+        // let blend_state = device.CreateBlendState(&desc, blend_state)
+        //     .map(|()| blend_state.unwrap().as_ref().unwrap().as_ref().unwrap())?;
 
         let desc = D3D11_RASTERIZER_DESC {
             FillMode: D3D11_FILL_SOLID,
@@ -469,9 +605,19 @@ impl Renderer {
             ..Default::default()
         };
 
-        let rasterizer_state = None;
-        let rasterizer_state = device.CreateRasterizerState(&desc, rasterizer_state)
-            .map(|()| rasterizer_state.unwrap().as_ref().unwrap().as_ref().unwrap())?;
+        let mut rasterizer_state = None;
+
+        unsafe { 
+            device.CreateRasterizerState(
+                &desc,
+                Some(&mut rasterizer_state),
+            ).unwrap();
+        }
+
+
+        // let rasterizer_state = None;
+        // let rasterizer_state = device.CreateRasterizerState(&desc, rasterizer_state)
+        //     .map(|()| rasterizer_state.unwrap().as_ref().unwrap().as_ref().unwrap())?;
 
         let stencil_op_desc = D3D11_DEPTH_STENCILOP_DESC {
             StencilFailOp: D3D11_STENCIL_OP_KEEP,
@@ -490,11 +636,20 @@ impl Renderer {
             BackFace: stencil_op_desc,
         };
 
-        let depth_stencil_state = None;
-        let depth_stencil_state = device.CreateDepthStencilState(&desc, depth_stencil_state)
-            .map(|()| depth_stencil_state.unwrap().as_ref().unwrap().as_ref().unwrap())?;
+        let mut depth_stencil_state = None;
 
-        Ok((blend_state.clone(), rasterizer_state.clone(), depth_stencil_state.clone()))
+        unsafe { 
+            device.CreateDepthStencilState(
+                &desc,
+                Some(&mut depth_stencil_state),
+            ).unwrap();
+        }
+
+        // let depth_stencil_state = None;
+        // let depth_stencil_state = device.CreateDepthStencilState(&desc, depth_stencil_state)
+        //     .map(|()| depth_stencil_state.unwrap().as_ref().unwrap().as_ref().unwrap())?;
+
+        Ok((blend_state.unwrap(), rasterizer_state.unwrap(), depth_stencil_state.unwrap()))
     }
 }
 

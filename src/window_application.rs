@@ -324,7 +324,7 @@ impl WindowApplication {
         Ok(application)
     }
 
-    fn compile_shader(file_name: &str, profile: &str) -> ID3DBlob {
+    pub fn compile_shader(file_name: &str, profile: &str) -> ID3DBlob {
         let exe_path = std::env::current_exe().ok().unwrap();
         let asset_path = exe_path.parent().unwrap();
         let shaders_hlsl_path = asset_path.join(file_name);
