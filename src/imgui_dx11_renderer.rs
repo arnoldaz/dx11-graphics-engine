@@ -210,7 +210,7 @@ impl Renderer {
             1,
             Some(&Some(self.vertex_buffer.get_buf().clone())),
             Some(&stride),
-            None // Some(&0)
+            Some(&0)
         );
         ctx.IASetIndexBuffer(self.index_buffer.get_buf(), draw_fmt, 0);
         ctx.IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -284,27 +284,34 @@ impl Renderer {
     }
 
     unsafe fn write_buffers(&self, draw_data: &DrawData) -> Result<()> {
+        let mut vtx_resource: D3D11_MAPPED_SUBRESOURCE = Default::default();
+        self.context.Map(
+            self.vertex_buffer.get_buf(),
+            0,
+            D3D11_MAP_WRITE_DISCARD,
+            0,
+            Some(&mut vtx_resource),
+        )?;
+
         // let vtx_resource = None;
-        // unsafe { 
-        //     self.context.Map(
-        //         self.vertex_buffer.get_buf(),
-        //         0,
-        //         D3D11_MAP_WRITE_DISCARD,
-        //         0,
-        //         vtx_resource,
-        //     );
-        // }
+        // let vtx_resource = self.context.Map(self.vertex_buffer.get_buf(), 0, D3D11_MAP_WRITE_DISCARD, 0, vtx_resource)
+        //     .map(|()| *vtx_resource.unwrap())?;
 
-        let vtx_resource = None;
-        let vtx_resource = self.context.Map(self.vertex_buffer.get_buf(), 0, D3D11_MAP_WRITE_DISCARD, 0, vtx_resource)
-            .map(|()| *vtx_resource.unwrap())?;
+        let mut idx_resource: D3D11_MAPPED_SUBRESOURCE = Default::default();
+        self.context.Map(
+            self.index_buffer.get_buf(),
+            0,
+            D3D11_MAP_WRITE_DISCARD,
+            0,
+            Some(&mut idx_resource),
+        )?;
 
-        let idx_resource = None;
-        let idx_resource = self.context.Map(self.index_buffer.get_buf(), 0, D3D11_MAP_WRITE_DISCARD, 0, idx_resource)
-            .map(|()| *idx_resource.unwrap())?;
+        // let idx_resource = None;
+        // let idx_resource = self.context.Map(self.index_buffer.get_buf(), 0, D3D11_MAP_WRITE_DISCARD, 0, idx_resource)
+        //     .map(|()| *idx_resource.unwrap())?;
 
         let mut vtx_dst = slice::from_raw_parts_mut(
-            vtx_resource_unwrapped.pData.cast::<DrawVert>(),
+            vtx_resource.pData.cast::<DrawVert>(),
             draw_data.total_vtx_count as usize,
         );
         let mut idx_dst = slice::from_raw_parts_mut(
@@ -324,9 +331,19 @@ impl Renderer {
         self.context.Unmap(self.vertex_buffer.get_buf(), 0);
         self.context.Unmap(self.index_buffer.get_buf(), 0);
 
-        let mut mapped_resource = None;
-        let mapped_resource = self.context.Map(&self.constant_buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, mapped_resource)
-            .map(|()| *mapped_resource.unwrap())?;
+
+        let mut mapped_resource: D3D11_MAPPED_SUBRESOURCE = Default::default();
+        self.context.Map(
+            &self.constant_buffer,
+            0,
+            D3D11_MAP_WRITE_DISCARD,
+            0,
+            Some(&mut mapped_resource),
+        )?;
+
+        // let mut mapped_resource = None;
+        // let mapped_resource = self.context.Map(&self.constant_buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, mapped_resource)
+        //     .map(|()| *mapped_resource.unwrap())?;
 
         let l = draw_data.display_pos[0];
         let r = draw_data.display_pos[0] + draw_data.display_size[0];

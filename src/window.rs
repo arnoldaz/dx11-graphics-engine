@@ -60,6 +60,7 @@ impl Window {
             window_ui.imgui
                 .io_mut()
                 .update_delta_time(now.duration_since(last_frame));
+            println!("after update delta");
             last_frame = now;
 
             for (_, event) in glfw::flush_messages(&self.events) {
@@ -125,19 +126,39 @@ impl Window {
 
             render_callback((self.window_width, self.window_height));
         
+            println!("after render");
+
             let ui = window_ui.imgui.frame();
+            println!("after frame");
             ui.show_demo_window(&mut true);
 
+            // ui.window("Hello world")
+            // .size([1000.0, 1000.0], imgui::Condition::FirstUseEver)
+            // .build(|| {
+            //     ui.text("Hello world!");
+            //     ui.separator();
+            //     let mouse_pos = ui.io().mouse_pos;
+            //     ui.text(format!(
+            //         "Mouse Position: ({:.1},{:.1})",
+            //         mouse_pos[0], mouse_pos[1]
+            //     ));
+            // });
+
+            println!("after demo");
+            
+            
             window_ui.platform.prepare_render(ui, &mut self.window);
+            println!("after prepare");
             let draw_data = window_ui.imgui.render();
-
+            println!("after draw data");
+            
             // This is the only extra render step to add
-            window_ui.renderer
-                .render(draw_data)
-                .expect("error rendering imgui");
-
+            window_ui.renderer.render(draw_data).expect("error rendering imgui");
+            println!("after ui render");
+            
             // window.swap_buffers();
             self.glfw.poll_events();
+            println!("after poll");
         }
     }
 
