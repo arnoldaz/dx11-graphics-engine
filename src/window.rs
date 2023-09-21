@@ -66,6 +66,8 @@ impl Window {
             for (_, event) in glfw::flush_messages(&self.events) {
                 println!("Got window event: {:?}", event);
     
+                window_ui.platform.handle_event(window_ui.imgui.io_mut(), &self.window, &event);
+
                 match event {
                     glfw::WindowEvent::FramebufferSize(width, height) => {
                         self.window_width = width as u32;
@@ -128,7 +130,7 @@ impl Window {
 
 
 
-            
+            window_ui.platform.prepare_frame(window_ui.imgui.io_mut(), &mut self.window).unwrap();
             let ui = window_ui.imgui.frame();
 
             // ui.window("Hello world")
