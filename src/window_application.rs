@@ -429,7 +429,7 @@ impl WindowApplication {
     //     unsafe { pixel_shader.as_ref().unwrap().to_owned().unwrap() }
     // }
 
-    pub fn render(&self, viewport_size: (u32, u32)) {
+    pub fn render(&self, viewport_size: (u32, u32), window_ui: &mut crate::window_ui::WindowUi) {
 
         let viewport = D3D11_VIEWPORT {
             TopLeftX: 0f32,
@@ -469,6 +469,13 @@ impl WindowApplication {
             self.device_context.OMSetRenderTargets(Some(&[Some(self.render_target.clone())]), None);
 
             self.device_context.Draw(3, 0);
+
+
+
+
+            let draw_data = window_ui.imgui.render();            
+            window_ui.renderer.render(draw_data).expect("error rendering imgui");
+
 
             let _ = self.swap_chain.Present(1, 0); 
         };

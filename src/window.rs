@@ -1,4 +1,4 @@
-use crate::window_ui::WindowUi;
+use crate::{window_ui::WindowUi, window_application::WindowApplication};
 
 
 pub struct Window {
@@ -51,8 +51,9 @@ impl Window {
         let window_handle = self.window.get_win32_window();
         unsafe { std::mem::transmute(window_handle) }
     }
-
-    pub fn run<'a>(&mut self, render_callback: Box<dyn Fn((u32, u32)) + 'a>, resize_callback: Box<dyn Fn((u32, u32)) + 'a>, window_ui: &mut WindowUi) {
+    
+    // render_callback: Box<dyn Fn((u32, u32)) + 'a>, resize_callback: Box<dyn Fn((u32, u32)) + 'a>
+    pub fn run<'a>(&mut self, window_application: &WindowApplication, window_ui: &mut WindowUi) {
         let mut last_frame = std::time::Instant::now();
 
         while !self.window.should_close() {
@@ -60,7 +61,6 @@ impl Window {
             window_ui.imgui
                 .io_mut()
                 .update_delta_time(now.duration_since(last_frame));
-            println!("after update delta");
             last_frame = now;
 
             for (_, event) in glfw::flush_messages(&self.events) {
@@ -71,7 +71,7 @@ impl Window {
                         self.window_width = width as u32;
                         self.window_height = height as u32;
 
-                        resize_callback((self.window_width, self.window_height));
+                        window_application.on_resize((self.window_width, self.window_height));
                     }
                     glfw::WindowEvent::Key(glfw::Key::Enter, _, glfw::Action::Press, _) => {
                         if self.is_fullscreen {
@@ -124,41 +124,32 @@ impl Window {
                 };
             }
 
-            render_callback((self.window_width, self.window_height));
-        
-            println!("after render");
+            
 
+
+
+            
             let ui = window_ui.imgui.frame();
-            println!("after frame");
-            ui.show_demo_window(&mut true);
 
             // ui.window("Hello world")
-            // .size([1000.0, 1000.0], imgui::Condition::FirstUseEver)
-            // .build(|| {
-            //     ui.text("Hello world!");
-            //     ui.separator();
-            //     let mouse_pos = ui.io().mouse_pos;
-            //     ui.text(format!(
-            //         "Mouse Position: ({:.1},{:.1})",
-            //         mouse_pos[0], mouse_pos[1]
-            //     ));
-            // });
+            //     .size([1000.0, 1000.0], imgui::Condition::FirstUseEver)
+            //     .build(|| {
+            //         ui.text("Hello world!");
+            //         ui.separator();
+            //         let mouse_pos = ui.io().mouse_pos;
+            //         ui.text(format!(
+            //             "Mouse Position: ({:.1},{:.1})",
+            //             mouse_pos[0], mouse_pos[1]
+            //         ));
+            //     });
 
-            println!("after demo");
-            
-            
+            ui.show_demo_window(&mut true);
             window_ui.platform.prepare_render(ui, &mut self.window);
-            println!("after prepare");
-            let draw_data = window_ui.imgui.render();
-            println!("after draw data");
             
-            // This is the only extra render step to add
-            window_ui.renderer.render(draw_data).expect("error rendering imgui");
-            println!("after ui render");
+            window_application.render((self.window_width, self.window_height), window_ui);
             
             // window.swap_buffers();
             self.glfw.poll_events();
-            println!("after poll");
         }
     }
 

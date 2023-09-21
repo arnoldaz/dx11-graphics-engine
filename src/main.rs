@@ -20,8 +20,9 @@ fn main() {
     let mut window_ui = WindowUi::new(&window, &application.device).expect("Window UI failed to init");
 
     window.run(
-        Box::new(|viewport_size: (u32, u32)| { application.render(viewport_size); }),
-        Box::new(|viewport_size: (u32, u32)| { application.on_resize(viewport_size); }),
+        &application,
+        // Box::new(|viewport_size: (u32, u32)| { application.render(viewport_size); }),
+        // Box::new(|viewport_size: (u32, u32)| { application.on_resize(viewport_size); }),
         &mut window_ui
     );
 

@@ -110,9 +110,15 @@ impl Renderer {
     ///
     /// [`Ui`]: https://docs.rs/imgui/*/imgui/struct.Ui.html
     pub fn render(&mut self, draw_data: &DrawData) -> Result<()> {
-        if draw_data.display_size[0] <= 0.0 || draw_data.display_size[1] <= 0.0 {
+        let fb_width = draw_data.display_size[0] * draw_data.framebuffer_scale[0];
+        let fb_height = draw_data.display_size[1] * draw_data.framebuffer_scale[1];
+        if !(fb_width > 0.0 && fb_height > 0.0) {
             return Ok(());
         }
+
+        // if draw_data.display_size[0] <= 0.0 || draw_data.display_size[1] <= 0.0 {
+        //     return Ok(());
+        // }
         unsafe {
             if self.vertex_buffer.len() < draw_data.total_vtx_count as usize {
                 self.vertex_buffer =
@@ -122,12 +128,12 @@ impl Renderer {
                 self.index_buffer =
                     Self::create_index_buffer(&self.device, draw_data.total_idx_count as usize)?;
             }
+            
             let _state_guard = StateBackup::backup(Some(self.context.clone()));
-
             self.write_buffers(draw_data)?;
             self.setup_render_state(draw_data);
             self.render_impl(draw_data)?;
-            _state_guard.restore();
+            // _state_guard.restore();
         }
         Ok(())
     }
