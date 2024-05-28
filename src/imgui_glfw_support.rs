@@ -92,10 +92,12 @@ impl GlfwPlatform {
     /// * platform name is set
     pub fn init(imgui: &mut Context) -> GlfwPlatform {
         let io = imgui.io_mut();
+
+
         io.backend_flags.insert(BackendFlags::HAS_MOUSE_CURSORS);
         io.backend_flags.insert(BackendFlags::HAS_SET_MOUSE_POS);
-        io.backend_flags.insert(BackendFlags::HAS_MOUSE_CURSORS);
-        io.backend_flags.insert(BackendFlags::HAS_SET_MOUSE_POS);
+        // io.backend_flags.insert(BackendFlags::HAS_MOUSE_CURSORS);
+        // io.backend_flags.insert(BackendFlags::HAS_SET_MOUSE_POS);
         io[Key::Tab] = GlfwKey::Tab as _;
         io[Key::LeftArrow] = GlfwKey::Left as _;
         io[Key::RightArrow] = GlfwKey::Right as _;
@@ -156,11 +158,7 @@ impl GlfwPlatform {
         match *event {
             WindowEvent::Key(key, _scancode, action, modifiers) => {
                 if key as i32 >= 0 {
-                    if action == Action::Release {
-                        io.keys_down[key as usize] = false;
-                    } else {
-                        io.keys_down[key as usize] = true;
-                    }
+                    io.keys_down[key as usize] = action != Action::Release;
                 }
                 io.key_shift = modifiers.contains(Modifiers::Shift);
                 io.key_ctrl = modifiers.contains(Modifiers::Control);
@@ -190,6 +188,13 @@ impl GlfwPlatform {
                     MouseButton::Button2 => io.mouse_down[1] = pressed,
                     MouseButton::Button3 => io.mouse_down[2] = pressed,
                     _ => (),
+                }
+            }
+            WindowEvent::Focus(newly_focused) => {
+                if !newly_focused {
+                    // Set focus-lost to avoid stuck keys (like 'alt'
+                    // when alt-tabbing)
+                    io.app_focus_lost = true;
                 }
             }
             _ => {}

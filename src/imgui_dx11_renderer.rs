@@ -56,7 +56,7 @@ impl Renderer {
     /// `device` must be a valid [`ID3D11Device`] pointer.
     ///
     /// [`ID3D11Device`]: https://docs.rs/winapi/0.3/x86_64-pc-windows-msvc/winapi/um/d3d11/struct.ID3D11Device.html
-    pub unsafe fn new(im_ctx: &mut imgui::Context, device: &ID3D11Device) -> Result<Self> {
+    pub unsafe fn new(im_ctx: &mut imgui::Context, device: &ID3D11Device, context: &ID3D11DeviceContext) -> Result<Self> {
         let (vertex_shader, input_layout, constant_buffer) = Self::create_vertex_shader(device)?;
         let pixel_shader = Self::create_pixel_shader(device)?;
         let (blend_state, rasterizer_state, depth_stencil_state) = Self::create_device_objects(device)?;
@@ -64,7 +64,7 @@ impl Renderer {
         let vertex_buffer = Self::create_vertex_buffer(device, 0)?;
         let index_buffer = Self::create_index_buffer(device, 0)?;
 
-        let context = device.GetImmediateContext()?;
+        // let context = device.GetImmediateContext()?;
 
         im_ctx.io_mut().backend_flags |= BackendFlags::RENDERER_HAS_VTX_OFFSET;
         let renderer_name = "imgui_dx11_renderer";
@@ -72,7 +72,7 @@ impl Renderer {
 
         Ok(Renderer {
             device: device.clone(),
-            context,
+            context: context.clone(),
             vertex_shader,
             pixel_shader,
             input_layout,
@@ -129,20 +129,20 @@ impl Renderer {
                     Self::create_index_buffer(&self.device, draw_data.total_idx_count as usize)?;
             }
             
-            let _state_guard = StateBackup::backup(Some(self.context.clone()));
             self.write_buffers(draw_data)?;
+            let _state_guard = StateBackup::backup(Some(self.context.clone()));
             self.setup_render_state(draw_data);
             self.render_impl(draw_data)?;
-            // _state_guard.restore();
+            _state_guard.restore();
         }
         Ok(())
     }
 
     unsafe fn render_impl(&self, draw_data: &DrawData) -> Result<()> {
         let clip_off = draw_data.display_pos;
-        let clip_scale = draw_data.framebuffer_scale;
-        let mut vertex_offset = 0;
-        let mut index_offset = 0;
+        // let clip_scale = draw_data.framebuffer_scale;
+        let mut global_vertex_offset = 0;
+        let mut global_index_offset = 0;
         let mut last_tex = TextureId::from(FONT_TEX_ID);
         let context = &self.context;
         context.PSSetShaderResources(0, Some(&[Some(self.font_resource_view.clone())]));
@@ -151,34 +151,50 @@ impl Renderer {
                 match cmd {
                     DrawCmd::Elements {
                         count,
-                        cmd_params: DrawCmdParams { clip_rect, texture_id, .. },
+                        cmd_params: DrawCmdParams { clip_rect, texture_id, idx_offset, vtx_offset },
                     } => {
-                        if texture_id != last_tex {
-                            let texture = if texture_id.id() == FONT_TEX_ID {
-                                self.font_resource_view.clone()
-                            } else {
-                                self.textures
-                                    .get(texture_id)
-                                    .ok_or(DXGI_ERROR_INVALID_CALL)?
-                                    .clone()
-                            };
-                            context.PSSetShaderResources(0, Some(&[Some(texture)]));
-                            last_tex = texture_id;
+
+                        let clip_min = [(clip_rect[0] - clip_off[0]) as i32, (clip_rect[1] - clip_off[1]) as i32];
+                        let clip_max = [(clip_rect[2] - clip_off[0]) as i32, (clip_rect[3] - clip_off[1]) as i32];
+                        if clip_max[0] <= clip_min[0] || clip_max[1] <= clip_min[1] {
+                            continue;
                         }
 
                         let r = RECT {
-                            left: ((clip_rect[0] - clip_off[0]) * clip_scale[0]) as i32,
-                            top: ((clip_rect[1] - clip_off[1]) * clip_scale[1]) as i32,
-                            right: ((clip_rect[2] - clip_off[0]) * clip_scale[0]) as i32,
-                            bottom: ((clip_rect[3] - clip_off[1]) * clip_scale[1]) as i32,
+                            left: clip_min[0],
+                            top: clip_min[1],
+                            right: clip_max[0],
+                            bottom: clip_max[1],
                         };
                         context.RSSetScissorRects(Some(&[r]));
+
+
+
+                        let texture = self.textures
+                            .get(texture_id)
+                            .ok_or(DXGI_ERROR_INVALID_CALL)?
+                            .clone();
+
+                        context.PSSetShaderResources(0, Some(&[Some(texture)]));
                         context.DrawIndexed(
                             count as u32,
-                            index_offset as u32,
-                            vertex_offset as i32,
+                            (idx_offset + global_index_offset) as u32,
+                            (vtx_offset + global_vertex_offset) as i32,
                         );
-                        index_offset += count;
+
+
+                        // if texture_id != last_tex {
+                        //     let texture = if texture_id.id() == FONT_TEX_ID {
+                        //         self.font_resource_view.clone()
+                        //     } else {
+                        //         self.textures
+                        //             .get(texture_id)
+                        //             .ok_or(DXGI_ERROR_INVALID_CALL)?
+                        //             .clone()
+                        //     };
+                        //     context.PSSetShaderResources(0, Some(&[Some(texture)]));
+                        //     last_tex = texture_id;
+                        // }
                     },
                     DrawCmd::ResetRenderState => self.setup_render_state(draw_data),
                     DrawCmd::RawCallback { callback, raw_cmd } => {
@@ -186,7 +202,8 @@ impl Renderer {
                     },
                 }
             }
-            vertex_offset += draw_list.vtx_buffer().len();
+            global_vertex_offset += draw_list.vtx_buffer().len();
+            global_index_offset += draw_list.idx_buffer().len();
         }
         Ok(())
     }
@@ -228,7 +245,10 @@ impl Renderer {
         ctx.HSSetShader(None, None);
         ctx.DSSetShader(None, None);
         ctx.CSSetShader(None, None);
-        ctx.OMSetBlendState(&self.blend_state, None, 0xFFFFFFFF);
+
+        let blend_factor = [0.0, 0.0, 0.0, 0.0];
+
+        ctx.OMSetBlendState(&self.blend_state, Some(&blend_factor), 0xFFFFFFFF);
         ctx.OMSetDepthStencilState(&self.depth_stencil_state, 0);
         ctx.RSSetState(&self.rasterizer_state);
     }
@@ -356,9 +376,9 @@ impl Renderer {
         let t = draw_data.display_pos[1];
         let b = draw_data.display_pos[1] + draw_data.display_size[1];
         let mvp = [
-            [2.0 / (r - l), 0.0, 0.0, 0.0],
-            [0.0, 2.0 / (t - b), 0.0, 0.0],
-            [0.0, 0.0, 0.5, 0.0],
+            [2.0 / (r - l),     0.0,               0.0, 0.0],
+            [0.0,               2.0 / (t - b),     0.0, 0.0],
+            [0.0,               0.0,               0.5, 0.0],
             [(r + l) / (l - r), (t + b) / (b - t), 0.5, 1.0],
         ];
         *mapped_resource.pData.cast::<VertexConstantBuffer>() = VertexConstantBuffer { mvp };
@@ -720,6 +740,31 @@ struct StateBackup {
     input_layout: Option<ID3D11InputLayout>,
 }
 
+#[derive(Default)]
+struct BackupState {
+    scissor_rects_count: u32,
+    viewports_count: u32,
+    scissor_rects: RECT,
+    viewports: D3D11_VIEWPORT,
+    rasterizer_state: Option<ID3D11RasterizerState>,
+}
+
+
+impl BackupState {
+    unsafe fn backup(ctx: ID3D11DeviceContext) -> Self {
+        let mut old = Self::default();
+
+        old.scissor_rects_count = D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE;
+        old.viewports_count = D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE;
+
+        ctx.RSGetScissorRects(&mut old.scissor_rects_count, Some(&mut old.scissor_rects));
+        ctx.RSGetViewports(&mut old.viewports_count, Some(&mut old.viewports));
+        old.rasterizer_state = ctx.RSGetState().ok();
+
+        old
+    }
+}
+
 impl StateBackup {
     unsafe fn backup(context: Option<ID3D11DeviceContext>) -> Self {
         let mut result = Self::default();
@@ -727,6 +772,7 @@ impl StateBackup {
         let ctx = context.as_ref().unwrap();
         ctx.RSGetScissorRects(&mut 16, Some(&mut result.scissor_rects));
         ctx.RSGetViewports(&mut 16, Some(&mut result.viewports));
+
         result.rasterizer_state = ctx.RSGetState().ok();
         ctx.OMGetBlendState(
             Some(&mut result.blend_state),
@@ -768,21 +814,35 @@ impl StateBackup {
 
             ctx.RSSetScissorRects(Some(&[self.scissor_rects]));
             ctx.RSSetViewports(Some(&[self.viewports]));
-            ctx.RSSetState(&self.rasterizer_state.unwrap());
-            ctx.OMSetBlendState(&self.blend_state.unwrap(), Some(&self.blend_factor), 0xFFFFFFFF);
-            ctx.OMSetDepthStencilState(&self.depth_stencil_state.unwrap(), self.stencil_ref);
+
+            if let Some(rasterizer_state) = self.rasterizer_state { ctx.RSSetState(&rasterizer_state) }
+            if let Some(blend_state) = self.blend_state { ctx.OMSetBlendState(&blend_state, Some(&self.blend_factor), 0xFFFFFFFF) }
+            
+            if let Some(depth_stencil_state) = self.depth_stencil_state {
+                ctx.OMSetDepthStencilState(&depth_stencil_state, self.stencil_ref);
+            }
+
             ctx.PSSetShaderResources(0, Some(&self.shader_resource));
             ctx.PSSetSamplers(0, Some(&self.sampler));
             ctx.PSSetShader(&self.ps_shader.unwrap(), Some(&inst));
             ctx.VSSetShader(&self.vs_shader.unwrap(), Some(&vinst));
             ctx.VSSetConstantBuffers(0, Some(&self.constant_buffer));
-            ctx.GSSetShader(&self.gs_shader.unwrap(), None);
+
+            if let Some(gs_shader) = self.gs_shader {
+                ctx.GSSetShader(&gs_shader, None);
+            }
+
             ctx.IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-            ctx.IASetIndexBuffer(
-                &self.index_buffer.unwrap(),
-                self.index_buffer_format,
-                self.index_buffer_offset,
-            );
+
+            if let Some(index_buffer) = self.index_buffer {
+                ctx.IASetIndexBuffer(
+                    &index_buffer,
+                    self.index_buffer_format,
+                    self.index_buffer_offset,
+                );
+            }
+
+
             ctx.IASetVertexBuffers(
                 0,
                 1,

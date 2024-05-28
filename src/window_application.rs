@@ -1,5 +1,5 @@
 
-use std::{ptr};
+use std::{ptr, borrow::BorrowMut};
 
 use windows::{
     core::*, Win32::Foundation::*, Win32::Graphics::Direct3D::*, Win32::Graphics::Direct3D11::*,
@@ -29,9 +29,9 @@ pub struct WindowApplication {
 
     dxgi_factory: IDXGIFactory2,
     pub device: ID3D11Device,
-    device_context: ID3D11DeviceContext,
+    pub device_context: ID3D11DeviceContext,
     swap_chain: IDXGISwapChain1,
-    render_target: ID3D11RenderTargetView,
+    render_target: Option<ID3D11RenderTargetView>,
 
     vertex_layout: ID3D11InputLayout,
     triangle_vertices: ID3D11Buffer,
@@ -102,7 +102,7 @@ impl WindowApplication {
                 D3D_DRIVER_TYPE_HARDWARE,
                 HINSTANCE::default(),
                 D3D11_CREATE_DEVICE_DEBUG | D3D11_CREATE_DEVICE_BGRA_SUPPORT,
-                Some(&[D3D_FEATURE_LEVEL_11_0]),
+                Some(&[D3D_FEATURE_LEVEL_11_1]),
                 D3D11_SDK_VERSION,
                 Some(&mut device),
                 None,
@@ -118,8 +118,8 @@ impl WindowApplication {
 
         // (2560, 1440)
         let swap_chain_descriptor = DXGI_SWAP_CHAIN_DESC1 {
-            Width: 2560, //window.window_width,
-            Height: 1440, //window.window_height,
+            Width: window.window_width,
+            Height: window.window_height,
             Format: DXGI_FORMAT_B8G8R8A8_UNORM,
             SampleDesc: DXGI_SAMPLE_DESC {
                 Count: 1,
@@ -312,7 +312,7 @@ impl WindowApplication {
             device: device_unwrapped,
             device_context: device_context.unwrap(),
             swap_chain,
-            render_target: render_target.unwrap(),
+            render_target: render_target,
 
             vertex_layout: vertex_layout.as_ref().unwrap().to_owned(),
             triangle_vertices: triangle_vertices.as_ref().unwrap().to_owned(),
@@ -434,16 +434,16 @@ impl WindowApplication {
         let viewport = D3D11_VIEWPORT {
             TopLeftX: 0f32,
             TopLeftY: 0f32,
-            Width: 2560.0, //window.window_width,
-            Height: 1440.0, //window.window_height,
-            // Width: viewport_size.0 as f32, // self.window.window_width as f32,
-            // Height: viewport_size.1 as f32, // self.window.window_height as f32,
+            // Width: 2560.0, //window.window_width,
+            // Height: 1440.0, //window.window_height,
+            Width: viewport_size.0 as f32, // self.window.window_width as f32,
+            Height: viewport_size.1 as f32, // self.window.window_height as f32,
             MinDepth: 0f32,
             MaxDepth: 1f32,
         };
 
         unsafe { 
-            self.device_context.ClearRenderTargetView(&self.render_target, &[0.1f32, 0.1f32, 0.1f32, 0.1f32]);
+            self.device_context.ClearRenderTargetView(&self.render_target.clone().unwrap(), &[0.1f32, 0.1f32, 0.1f32, 0.1f32]);
 
 
             self.device_context.IASetInputLayout(&self.vertex_layout);
@@ -466,40 +466,42 @@ impl WindowApplication {
             self.device_context.VSSetShader(&self.vertex_shader, None);
             self.device_context.PSSetShader(&self.pixel_shader, None);
 
-            self.device_context.OMSetRenderTargets(Some(&[Some(self.render_target.clone())]), None);
+            self.device_context.OMSetRenderTargets(Some(&[self.render_target.clone()]), None);
 
             self.device_context.Draw(3, 0);
 
 
 
 
-            let draw_data = window_ui.imgui.render();            
-            window_ui.renderer.render(draw_data).expect("error rendering imgui");
+            // let draw_data = window_ui.imgui.render();
+            // window_ui.renderer.render(draw_data).expect("error rendering imgui");
 
 
-            let _ = self.swap_chain.Present(1, 0); 
+            let _ = self.swap_chain.Present(0, 0); 
         };
 
     }
 
-    pub fn on_resize(&self, swap_chain_buffer_size: (u32, u32)) {
+    pub fn on_resize(&mut self, swap_chain_buffer_size: (u32, u32)) {
 
-        // unsafe { 
+        self.render_target = None;
 
-        //     self.device_context.OMSetRenderTargets(None, None);
-        //     self.device_context.Flush();
+        unsafe { 
 
-        // };
+            self.device_context.OMSetRenderTargets(None, None);
+            self.device_context.Flush();
 
-        // unsafe { 
-        //     self.swap_chain.ResizeBuffers(
-        //         0,
-        //         swap_chain_buffer_size.0,
-        //         swap_chain_buffer_size.1,
-        //         DXGI_FORMAT_UNKNOWN,
-        //         0,
-        //     ).unwrap();
-        // };
+        };
+
+        unsafe { 
+            self.swap_chain.ResizeBuffers(
+                0,
+                swap_chain_buffer_size.0,
+                swap_chain_buffer_size.1,
+                DXGI_FORMAT_UNKNOWN,
+                0,
+            ).unwrap();
+        };
     }
 
     // pub fn run(&mut self) {

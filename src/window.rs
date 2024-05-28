@@ -1,3 +1,5 @@
+use glfw::Context;
+
 use crate::{window_ui::WindowUi, window_application::WindowApplication};
 
 
@@ -53,7 +55,7 @@ impl Window {
     }
     
     // render_callback: Box<dyn Fn((u32, u32)) + 'a>, resize_callback: Box<dyn Fn((u32, u32)) + 'a>
-    pub fn run<'a>(&mut self, window_application: &WindowApplication, window_ui: &mut WindowUi) {
+    pub fn run(&mut self, window_application: &mut WindowApplication, window_ui: &mut WindowUi) {
         let mut last_frame = std::time::Instant::now();
 
         while !self.window.should_close() {
@@ -150,7 +152,8 @@ impl Window {
             
             window_application.render((self.window_width, self.window_height), window_ui);
             
-            // window.swap_buffers();
+            self.window.swap_buffers();
+
             self.glfw.poll_events();
         }
     }
